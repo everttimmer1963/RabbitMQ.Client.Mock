@@ -4,10 +4,12 @@ using System.Collections.Concurrent;
 namespace RabbitMQ.Client.Mock.Domain;
 internal class RabbitQueue(string name)
 {
+    private readonly ConcurrentDictionary<string, IAsyncBasicConsumer> _consumers = new();
     private readonly ConcurrentQueue<RabbitMessage> _queue = new();
     private readonly ConcurrentDictionary<ulong, RabbitMessage> _activeMessages = new ConcurrentDictionary<ulong, RabbitMessage>();
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
 
+    #region Public Properties
     public string Name { get; set; } = name;
 
     public bool IsDurable { get; set; }
@@ -15,6 +17,22 @@ internal class RabbitQueue(string name)
     public bool IsExclusive { get; set; }
 
     public bool AutoDelete { get; set; }
+
+    public IDictionary<string, object?> Arguments { get; } = new Dictionary<string, object?>();
+    #endregion
+
+    #region Methods
+    internal ValueTask AddConsumer(string consumerTag, IAsyncBasicConsumer consumer)
+    {
+        _consumers.AddOrUpdate(consumerTag, consumer, (key, oldValue) => consumer);
+        return ValueTask.CompletedTask;
+    }
+
+    internal ValueTask RemoveConsumer(string consumerTag)
+    {
+        _consumers.TryRemove(consumerTag, out _);
+        return ValueTask.CompletedTask;
+    }
 
     internal ValueTask<bool> PublishMessageAsync(RabbitMessage message)
     {
@@ -77,4 +95,5 @@ internal class RabbitQueue(string name)
             _semaphore.Release();
         }
     }
+    #endregion
 }

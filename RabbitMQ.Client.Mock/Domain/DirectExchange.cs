@@ -1,4 +1,5 @@
 ﻿
+
 namespace RabbitMQ.Client.Mock.Domain;
 
 internal class DirectExchange : Exchange

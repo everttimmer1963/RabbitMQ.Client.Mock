@@ -53,6 +53,15 @@ internal class RabbitMQServer
         return ValueTask.FromResult<Exchange?>(Exchanges.TryGetValue(exchange, out var result) ? result: null);
     }
 
+    public ValueTask ExchangeDeleteAsync(Exchange exchange)
+    {
+        if (Exchanges.ContainsKey(exchange.Name))
+        {
+            Exchanges.Remove(exchange.Name);
+        }
+        return ValueTask.CompletedTask;
+    }
+
     public ValueTask ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?> arguments)
     {
         if (Exchanges.ContainsKey(exchange))
