@@ -1,4 +1,4 @@
-﻿
+﻿    
 using System.Collections.Concurrent;
 
 namespace RabbitMQ.Client.Mock.Domain;
@@ -38,6 +38,8 @@ internal class RabbitQueue
     public bool AutoDelete { get; set; }
 
     public IDictionary<string, object?> Arguments { get; } = new Dictionary<string, object?>();
+
+    public bool HasDeadLetterQueue => Arguments.ContainsKey("x-dead-letter-exchange");
     #endregion
 
     #region Methods
@@ -77,6 +79,10 @@ internal class RabbitQueue
 
     internal ValueTask<bool> PublishMessageAsync(RabbitMessage message)
     {
+        // assign the name of this queue to the message in order to be able to
+        // discover a message's origin.
+        message.Queue = Name;
+
         _queue.Enqueue(message);
 
         // signal message arrival to the delivery loop.
@@ -101,10 +107,10 @@ internal class RabbitQueue
         return await _server.RemovePendingMessageBindingAsync(deliveryTag, Name);
     }
 
-    internal async ValueTask<RabbitMessage?> RejectMessageAsync(ulong deliveryTag, bool requeue)
+    internal async ValueTask<RabbitMessage?> RejectMessageAsync(ulong deliveryTag, bool multiple, bool requeue)
     {
-        var removed = _pendingMessages.TryRemove(deliveryTag, out var message);
-        if (!removed || message is null)
+        var message = _pendingMessages.TryRemove(deliveryTag, out var msg) ? msg : null;
+        if (message is null)
         {
             return null;
         }
@@ -113,7 +119,19 @@ internal class RabbitQueue
         {
             var requeued = await RequeueMessageAsync(message);
         }
+
+        if (HasDeadLetterQueue)
+        { 
+            await _server.SendToDeadLetterQueueIfApplicable(this, message);
+        }
+
         await _server.RemovePendingMessageBindingAsync(deliveryTag, Name);
+
+        if (multiple)
+        {
+            return await RejectMessageAsync(deliveryTag - 1, multiple, requeue);
+        }
+
         return message;
     }
 

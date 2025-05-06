@@ -89,6 +89,26 @@ internal abstract class Exchange(string name, string type)
         }
     }
 
+    public virtual async ValueTask<IList<RabbitQueue>> GetBoundQueuesAsync(string bindingKey)
+    {
+        // first, test if the bindingkey corresponds to a single queue in this dead letter exchange.
+        var queue = QueueBindings.Values
+            .FirstOrDefault(qc => qc.FirstOrDefault(q => q.Name.Equals(bindingKey)) != null)?
+            .First(queue => queue.Name.Equals(bindingKey));
+        if (queue is not null)
+        {
+            return new List<RabbitQueue>() { queue };
+        }
+
+        // now, we try to get all bound queues for the bindingkey
+        var bindings = QueueBindings.TryGetValue(bindingKey, out var queues) ? queues : null;
+        if (bindings is not { Count: > 0 })
+        {
+            throw new ArgumentException($"No queues or bindings found for bindingkey {bindingKey}.");
+        }
+        return await Task.FromResult(bindings);
+    }
+
     public virtual IEnumerable<Exchange> EnumerateExchanges(RabbitMessage message)
     {
         var bindings = ExchangeBindings.TryGetValue(message.RoutingKey, out var result) ? result : null;
@@ -101,9 +121,8 @@ internal abstract class Exchange(string name, string type)
             yield return binding;
         }
     }
-    #endregion
 
-    protected virtual IEnumerable<RabbitQueue> EnumerateQueues(RabbitMessage message)
+    public virtual IEnumerable<RabbitQueue> EnumerateQueues(RabbitMessage message)
     {
         var bindings = QueueBindings.TryGetValue(message.RoutingKey, out var result) ? result : null;
         if (bindings is null)
@@ -116,14 +135,14 @@ internal abstract class Exchange(string name, string type)
         }
     }
 
-    protected virtual async ValueTask<bool> PublishMessageAsync(RabbitMessage message)
+    public virtual async ValueTask<bool> PublishMessageAsync(RabbitMessage message)
     {
         var published = false;
         var exchanges = EnumerateExchanges(message).ToArray();
         if (exchanges.Length > 0)
         {
             foreach (var exchange in exchanges)
-            { 
+            {
                 published |= await exchange.PublishMessageAsync(message);
             }
         }
@@ -137,6 +156,8 @@ internal abstract class Exchange(string name, string type)
         }
         return published;
     }
+
+    #endregion
 
     protected async ValueTask CheckForSelfDestructAsync()
     {

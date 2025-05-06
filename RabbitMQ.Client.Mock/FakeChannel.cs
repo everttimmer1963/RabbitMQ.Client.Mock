@@ -1,4 +1,5 @@
 ﻿using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Mock.Domain;
 
 namespace RabbitMQ.Client.Mock;
 internal class FakeChannel : IChannel
@@ -110,24 +111,40 @@ internal class FakeChannel : IChannel
             body: message.Body);
     }
 
-    public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default)
+    public async ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        await _server.RejectMessageAsync(deliveryTag, multiple, requeue);
     }
 
-    public ValueTask BasicPublishAsync<TProperties>(string exchange, string routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default) where TProperties : IReadOnlyBasicProperties, IAmqpHeader
+    public async ValueTask BasicPublishAsync<TProperties>(string exchange, string routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default) where TProperties : IReadOnlyBasicProperties, IAmqpHeader
     {
-        throw new NotImplementedException();
+        var message = new RabbitMessage
+        { 
+            Exchange = exchange,
+            RoutingKey = routingKey,
+            Mandatory = mandatory,
+            Immediate = true,
+            BasicProperties = basicProperties,
+            Body = body.ToArray(),
+            DeliveryTag = 0,
+        };
+        var exchangeInstance = await _server.GetExchangeAsync(exchange);
+        if (exchangeInstance is null)
+        {
+            throw new ArgumentException($"Exchange {exchange} not found.");
+        }
+        await exchangeInstance.PublishMessageAsync(message);
     }
 
-    public ValueTask BasicPublishAsync<TProperties>(CachedString exchange, CachedString routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default) where TProperties : IReadOnlyBasicProperties, IAmqpHeader
+    public async ValueTask BasicPublishAsync<TProperties>(CachedString exchange, CachedString routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default) where TProperties : IReadOnlyBasicProperties, IAmqpHeader
     {
-        throw new NotImplementedException();
+        await BasicPublishAsync(exchange.Value, routingKey.Value, mandatory, basicProperties, body, cancellationToken);
     }
 
     public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        // no implenentation needed for this test
+        return Task.CompletedTask;
     }
 
     public ValueTask BasicRejectAsync(ulong deliveryTag, bool requeue, CancellationToken cancellationToken = default)

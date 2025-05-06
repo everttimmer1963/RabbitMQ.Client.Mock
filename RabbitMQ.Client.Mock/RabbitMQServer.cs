@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client.Mock.Domain;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 namespace RabbitMQ.Client.Mock;
 
@@ -232,7 +233,7 @@ internal class RabbitMQServer
         return confirmed;
     }
 
-    internal async ValueTask<bool> RejectMessageAsync(ulong deliveryTag, bool requeue)
+    internal async ValueTask<bool> RejectMessageAsync(ulong deliveryTag, bool multiple, bool requeue)
     {
         var queues = PendingMessageBindings.TryGetValue(deliveryTag, out var result) ? result : null;
         if (queues is null)
@@ -246,8 +247,36 @@ internal class RabbitMQServer
             {
                 continue;
             }
-            await queueInstance.RejectMessageAsync(deliveryTag, requeue);
+            await queueInstance.RejectMessageAsync(deliveryTag, multiple, requeue);
         }
         return true;
     }
+
+    internal async ValueTask<bool> SendToDeadLetterQueueIfApplicable(RabbitQueue origin, RabbitMessage message)
+    {
+        if (origin.Arguments is not { Count: > 0 })
+        {
+            return false;
+        }
+        var dlExchange = origin.Arguments.TryGetValue("x-dead-letter-exchange", out var xchg) ? (string)xchg!: string.Empty;
+        var dlRoutingKey = origin.Arguments.TryGetValue("x-dead-letter-routing-key", out var rkey) ? (string)rkey! : message.RoutingKey;
+        
+        var exchangeInstance = Exchanges.TryGetValue(dlExchange, out var exchange) ? exchange : null;
+        if (exchangeInstance is null)
+        {
+            throw new ArgumentException($"Dead letter exchange {dlExchange} not found.");
+        }
+        var dlQueues = await exchangeInstance.GetBoundQueuesAsync(dlRoutingKey);
+        if (dlQueues is not { Count: > 0 })
+        {
+            throw new ArgumentException($"No queues or bindings found for bindingkey {dlRoutingKey}.");
+        }
+
+        foreach (var  queue in dlQueues)
+        {
+            await queue.PublishMessageAsync(message);
+        }
+        return true;
+    }
+
 }
