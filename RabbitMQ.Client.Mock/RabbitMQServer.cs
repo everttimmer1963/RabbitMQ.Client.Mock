@@ -40,7 +40,7 @@ internal class RabbitMQServer
         return _instance;
     }
 
-    public RabbitMQServer()
+    private RabbitMQServer()
     {
         Exchanges.Add(DefaultExchange.Name, DefaultExchange);
     }

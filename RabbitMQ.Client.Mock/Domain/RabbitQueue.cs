@@ -55,6 +55,11 @@ internal class RabbitQueue
         return ValueTask.FromResult((uint)_queue.Count);
     }
 
+    internal ValueTask<uint> PendingMessageCountAsync()
+    { 
+        return ValueTask.FromResult((uint)_pendingMessages.Count);
+    }
+
     internal async ValueTask<uint> PurgeMessagesAsync()
     {
         // get the number of messages for reporting purposes, and clear the queues.
