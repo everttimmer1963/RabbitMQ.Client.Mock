@@ -12,75 +12,114 @@ internal abstract class Exchange(string name, string type)
     public bool IsDurable { get; set; }
     public bool AutoDelete { get; set; }
     public IDictionary<string, object?> Arguments { get; } = new Dictionary<string, object?>();
-    protected ConcurrentDictionary<string, IList<RabbitQueue>> QueueBindings { get; } = new ConcurrentDictionary<string, IList<RabbitQueue>>();
-    protected ConcurrentDictionary<string, IList<Exchange>> ExchangeBindings { get; } = new ConcurrentDictionary<string, IList<Exchange>>();
+    public bool HasBindings => QueueBindings.Count > 0 || ExchangeBindings.Count > 0;
+    protected ConcurrentDictionary<string, QueueBinding> QueueBindings { get; } = new ConcurrentDictionary<string, QueueBinding>();
+    protected ConcurrentDictionary<string, ExchangeBinding> ExchangeBindings { get; } = new ConcurrentDictionary<string, ExchangeBinding>();
     #endregion
 
     #region Exchange Bindings
-    public virtual async ValueTask BindExchangeAsync(string exchange, string routingKey)
+    public virtual async ValueTask BindExchangeAsync(string exchange, string routingKey, IDictionary<string, object?>? arguments = null)
     {
         var exchangeInstance = await _server.GetExchangeAsync(exchange);
         if (exchangeInstance == null)
         {
             throw new ArgumentException($"Exchange {exchange} does not exist.");
         }
-        var bindings = ExchangeBindings.GetOrAdd(routingKey, new List<Exchange>());
-        bindings.Add(exchangeInstance);
+        var bindings = ExchangeBindings.GetOrAdd(routingKey, new ExchangeBinding { Arguments = arguments });
+        bindings.BoundExchanges.Add(exchangeInstance);
     }
 
     public virtual async ValueTask UnbindExchangeAsync(string exchange, string routingKey)
     {
-        var bindings = ExchangeBindings.TryGetValue(routingKey, out var exchanges) ? exchanges : null;
-        if (bindings is null)
+        var binding = ExchangeBindings.TryGetValue(routingKey, out var eb) ? eb : null;
+        if (binding is null)
         {
             throw new ArgumentException($"No bindings found for routingkey {routingKey}.");
         }
 
-        var binding = bindings.FirstOrDefault(b => b.Name == exchange);
-        if (binding is null)
+        var boundExchange = binding.BoundExchanges.FirstOrDefault(b => b.Name == exchange);
+        if (boundExchange is null)
         {
             throw new ArgumentException($"Exchange {exchange} not bound to exchange {Name}");
         }
 
-        bindings.Remove(binding);
+        binding.BoundExchanges.Remove(boundExchange);
 
-        if ( bindings.Count == 0 && AutoDelete)
+        if (binding.BoundExchanges.Count == 0 && AutoDelete)
         {
+            ExchangeBindings.TryRemove(routingKey, out _);
             await CheckForSelfDestructAsync();
         }
+    }
+
+    public ValueTask HandleExchangeDeleted(string exchange)
+    {
+        foreach (var binding in ExchangeBindings)
+        {
+            var boundExchange = binding.Value.BoundExchanges.FirstOrDefault(b => b.Name == exchange);
+            if (boundExchange is not null)
+            {
+                binding.Value.BoundExchanges.Remove(boundExchange);
+            }
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask HandleQueueDeleted(string queue)
+    {
+        foreach (var binding in QueueBindings)
+        {
+            var boundQueue = binding.Value.BoundQueues.FirstOrDefault(bq => bq.Name == queue);
+            if (boundQueue is not null)
+            {
+                binding.Value.BoundQueues.Remove(boundQueue);
+            }
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask RemoveAllBindings()
+    {
+        ExchangeBindings.Clear();
+        QueueBindings.Clear();
+        return ValueTask.CompletedTask;
     }
     #endregion
 
     #region Queue Bindings
-    public virtual ValueTask BindQueueAsync(string bindingKey, RabbitQueue queue)
+    public virtual ValueTask BindQueueAsync(string bindingKey, RabbitQueue queue, IDictionary<string,object?>? arguments = null)
     {
-        var bindings = QueueBindings.TryGetValue(bindingKey, out var queues) ? queues : null;
-        if (bindings is null)
+        var binding = QueueBindings.TryGetValue(bindingKey, out var result) ? result : null;
+        if (binding is null)
         {
-            throw new ArgumentException($"No bindings found for bindingkey {bindingKey}.");
+            binding = new QueueBinding { Arguments = arguments };
+            binding.BoundQueues.Add(queue);
+            QueueBindings.TryAdd(bindingKey, binding);
+            return ValueTask.CompletedTask;
         }
 
-        var binding = bindings.FirstOrDefault(q => q.Name.Equals(queue.Name));
-        if (binding is not null)
+        var boundQueue = binding.BoundQueues.FirstOrDefault(q => q.Name.Equals(queue.Name));
+        if (boundQueue is not null)
         {
             return ValueTask.CompletedTask;
         }
-        bindings.Add(queue);
+
+        binding.BoundQueues.Add(queue);
         return ValueTask.CompletedTask;
     }
 
     public virtual async ValueTask UnbindQueueAsync(string bindingKey, RabbitQueue queue)
     {
-        var bindings = QueueBindings.TryGetValue(bindingKey, out var queues) ? queues : null;
-        if (bindings is null)
+        var binding = QueueBindings.TryGetValue(bindingKey, out var result) ? result : null;
+        if (binding is null)
         {
-            throw new ArgumentException($"No bindings found for bindingkey {bindingKey}.");
+            throw new ArgumentException($"No binding found for bindingkey {bindingKey}.");
         }
 
-        var binding = bindings.FirstOrDefault(q => q.Name.Equals(queue.Name));
-        if (binding is not null)
+        var boundQueue = binding.BoundQueues.FirstOrDefault(q => q.Name.Equals(queue.Name));
+        if (boundQueue is not null)
         {
-            bindings.Remove(binding);
+            binding.BoundQueues.Remove(boundQueue);
         }
 
         if ( AutoDelete )
@@ -93,45 +132,45 @@ internal abstract class Exchange(string name, string type)
     {
         // first, test if the bindingkey corresponds to a single queue in this dead letter exchange.
         var queue = QueueBindings.Values
-            .FirstOrDefault(qc => qc.FirstOrDefault(q => q.Name.Equals(bindingKey)) != null)?
-            .First(queue => queue.Name.Equals(bindingKey));
+            .FirstOrDefault(qc => qc.BoundQueues.FirstOrDefault(q => q.Name.Equals(bindingKey)) != null)?
+            .BoundQueues.First(queue => queue.Name.Equals(bindingKey));
         if (queue is not null)
         {
             return new List<RabbitQueue>() { queue };
         }
 
-        // now, we try to get all bound queues for the bindingkey
-        var bindings = QueueBindings.TryGetValue(bindingKey, out var queues) ? queues : null;
-        if (bindings is not { Count: > 0 })
+        // that didn't work, we try to get all bound queues for the bindingkey
+        var binding = QueueBindings.TryGetValue(bindingKey, out var result) ? result : null;
+        if (binding is not { BoundQueues.Count: > 0 })
         {
             throw new ArgumentException($"No queues or bindings found for bindingkey {bindingKey}.");
         }
-        return await Task.FromResult(bindings);
+        return await Task.FromResult(binding.BoundQueues);
     }
 
     public virtual IEnumerable<Exchange> EnumerateExchanges(RabbitMessage message)
     {
-        var bindings = ExchangeBindings.TryGetValue(message.RoutingKey, out var result) ? result : null;
-        if (bindings is null)
+        var binding = ExchangeBindings.TryGetValue(message.RoutingKey, out var result) ? result : null;
+        if (binding is null)
         {
             yield break;
         }
-        foreach (var binding in bindings)
+        foreach (var boundExchange in binding.BoundExchanges)
         { 
-            yield return binding;
+            yield return boundExchange;
         }
     }
 
     public virtual IEnumerable<RabbitQueue> EnumerateQueues(RabbitMessage message)
     {
-        var bindings = QueueBindings.TryGetValue(message.RoutingKey, out var result) ? result : null;
-        if (bindings is null)
+        var binding = QueueBindings.TryGetValue(message.RoutingKey, out var result) ? result : null;
+        if (binding is null)
         {
             yield break;
         }
-        foreach (var binding in bindings)
+        foreach (var boundQueue in binding.BoundQueues)
         {
-            yield return binding;
+            yield return boundQueue;
         }
     }
 
@@ -153,6 +192,10 @@ internal abstract class Exchange(string name, string type)
             {
                 published |= await queue.PublishMessageAsync(message);
             }
+        }
+        if (published)
+        {
+            await _server.GetNextPublishSequenceNumber();
         }
         return published;
     }

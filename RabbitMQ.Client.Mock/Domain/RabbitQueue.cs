@@ -1,5 +1,6 @@
 ﻿    
 using System.Collections.Concurrent;
+using System.Net.Http.Headers;
 
 namespace RabbitMQ.Client.Mock.Domain;
 internal class RabbitQueue
@@ -17,7 +18,7 @@ internal class RabbitQueue
     private readonly ConcurrentQueue<RabbitMessage> _queue = new();
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
     private readonly RabbitMQServer _server = RabbitMQServer.GetInstance();
-    private readonly ConcurrentDictionary<ulong, RabbitMessage> _pendingMessages = new();
+    private readonly ConcurrentDictionary<ulong, List<RabbitMessage>> _pendingMessages = new();
     private AutoResetEvent _messageAvailable = new AutoResetEvent(true);
     private CancellationTokenSource _tokenSource;
 
@@ -44,9 +45,39 @@ internal class RabbitQueue
 
     #region Methods
 
+    internal ValueTask<int> ConsumerCountAsync()
+    {
+        return ValueTask.FromResult(_consumers.Count);
+    }
+
     internal ValueTask<uint> CountAsync()
     {
         return ValueTask.FromResult((uint)_queue.Count);
+    }
+
+    internal async ValueTask<uint> PurgeMessagesAsync()
+    {
+        // get the number of messages for reporting purposes, and clear the queues.
+        var messageCount = await CountAsync();
+        _pendingMessages.Clear();
+        _queue.Clear();
+
+        // remove all bound consumers from the queue.
+        _consumers.Clear();
+        return messageCount;
+    }
+
+    internal async ValueTask RemoveAndNontifyConsumersAsync()
+    {
+        foreach (var consumer in _consumers.Values)
+        {
+            var consumerInstance = await _server.GetConsumerAsync(consumer.ConsumerTag);
+            if (consumerInstance is not null)
+            {
+                await consumerInstance.HandleBasicCancelAsync(consumer.ConsumerTag);
+            }
+        }
+        _consumers.Clear();
     }
 
     internal async ValueTask<bool> AddConsumerAsync(string consumerTag, bool autoAck, IDictionary<string, object?>? arguments)
@@ -96,7 +127,7 @@ internal class RabbitQueue
         var message = _queue.TryDequeue(out var msg) ? msg : null;
         if (!autoAck && message is not null)
         {
-            _pendingMessages.TryAdd(message.DeliveryTag, message);
+            await AddPendingMessageAsync(message.DeliveryTag, message);
             await _server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
         }
         return message;
@@ -107,22 +138,22 @@ internal class RabbitQueue
         return await _server.RemovePendingMessageBindingAsync(deliveryTag, Name);
     }
 
-    internal async ValueTask<RabbitMessage?> RejectMessageAsync(ulong deliveryTag, bool multiple, bool requeue)
+    internal async ValueTask<List<RabbitMessage>?> RejectMessageAsync(ulong deliveryTag, bool multiple, bool requeue)
     {
-        var message = _pendingMessages.TryRemove(deliveryTag, out var msg) ? msg : null;
-        if (message is null)
+        var messages = _pendingMessages.TryRemove(deliveryTag, out var msg) ? msg : null;
+        if (messages is null)
         {
             return null;
         }
 
         if (requeue)
         {
-            var requeued = await RequeueMessageAsync(message);
+            var requeued = await RequeueMessagesAsync(messages);
         }
 
         if (HasDeadLetterQueue)
-        { 
-            await _server.SendToDeadLetterQueueIfApplicable(this, message);
+        {
+            messages.ForEach(async message => await _server.SendToDeadLetterQueueIfExists(this, message));
         }
 
         await _server.RemovePendingMessageBindingAsync(deliveryTag, Name);
@@ -132,16 +163,16 @@ internal class RabbitQueue
             return await RejectMessageAsync(deliveryTag - 1, multiple, requeue);
         }
 
-        return message;
+        return messages;
     }
 
-    private async ValueTask<bool> RequeueMessageAsync(RabbitMessage message)
+    private async ValueTask<bool> RequeueMessagesAsync(List<RabbitMessage> messages)
     {
         await _semaphore.WaitAsync();
         try
         {
             var queue = new ConcurrentQueue<RabbitMessage>();
-            queue.Enqueue(message);
+            messages.ForEach(queue.Enqueue);
             while (_queue.TryDequeue(out var item))
             {
                 queue.Enqueue(item);
@@ -157,6 +188,22 @@ internal class RabbitQueue
         {
             _semaphore.Release();
         }
+    }
+
+    private ValueTask<bool> AddPendingMessageAsync(ulong deliveryTag, RabbitMessage message)
+    {
+        var messagesForTag = _pendingMessages.GetOrAdd(deliveryTag, new List<RabbitMessage>());
+        messagesForTag.Add(message);
+        return ValueTask.FromResult(true);
+    }
+
+    private ValueTask<List<RabbitMessage>> RemovePendingMessagesAsync(ulong deliveryTag)
+    {
+        if (_pendingMessages.TryRemove(deliveryTag, out var messages))
+        {
+            return ValueTask.FromResult(messages);
+        }
+        return ValueTask.FromResult(new List<RabbitMessage>());
     }
 
     private async ValueTask MessageDeliveryLoopAsync(CancellationToken cancellationToken)
@@ -198,7 +245,7 @@ internal class RabbitQueue
 
                     if (!consumerSettings.AutoAcknowledge)
                     {
-                        _pendingMessages.TryAdd(message.DeliveryTag, message);
+                        await AddPendingMessageAsync(message.DeliveryTag, message);
                         await _server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
                     }
                 }

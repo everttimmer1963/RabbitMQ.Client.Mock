@@ -14,8 +14,9 @@ internal class RabbitMQServer
 
     private static readonly object _instanceLock = new();
     private static RabbitMQServer? _instance;
-    private int _lastDeliverTag = 0;
-    
+    private ulong _lastPublishSequenceNumber = 1;
+    private SemaphoreSlim _deliveryTagsSemaphore = new(1, 1);
+
     private IDictionary<string, Exchange> Exchanges { get; } = new ConcurrentDictionary<string, Exchange>();
 
     private IDictionary<string, RabbitQueue> Queues { get; } = new ConcurrentDictionary<string, RabbitQueue>();
@@ -27,6 +28,8 @@ internal class RabbitMQServer
     private IDictionary<ulong, IList<string>> PendingMessageBindings { get; } = new ConcurrentDictionary<ulong, IList<string>>();
 
     private IDictionary<string, IList<string>> ConsumerBindings { get; } = new ConcurrentDictionary<string, IList<string>>();
+
+    private IDictionary<int, ulong> ChannelDeliveryTags { get; } = new ConcurrentDictionary<int, ulong>();
 
     public static RabbitMQServer GetInstance()
     {
@@ -42,9 +45,29 @@ internal class RabbitMQServer
         Exchanges.Add(DefaultExchange.Name, DefaultExchange);
     }
 
-    internal ValueTask<int> GetNextDeliveryTagAsync()
+    internal async ValueTask<ulong> GetNextDeliveryTagAsync(int channelNumber)
     {
-        return ValueTask.FromResult(Interlocked.Increment(ref _lastDeliverTag));
+        await _deliveryTagsSemaphore.WaitAsync();
+        try
+        {
+            if (ChannelDeliveryTags.TryGetValue(channelNumber, out var deliveryTag))
+            {
+                deliveryTag++;
+                ChannelDeliveryTags[channelNumber] = deliveryTag;
+                return deliveryTag;
+            }
+            ChannelDeliveryTags.Add(channelNumber, 1);
+            return 1;
+        }
+        finally
+        {
+            _deliveryTagsSemaphore.Release();
+        }
+    }
+
+    internal ValueTask<ulong> GetNextPublishSequenceNumber()
+    {
+        return ValueTask.FromResult(Interlocked.Increment(ref _lastPublishSequenceNumber));
     }
 
     internal ValueTask<RabbitQueue?> GetQueueAsync(string queue)
@@ -52,29 +75,112 @@ internal class RabbitMQServer
         return ValueTask.FromResult<RabbitQueue?>(Queues.TryGetValue(queue, out var result) ? result : null);
     }
 
-    internal ValueTask QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?> arguments)
+    internal async ValueTask<uint> QueueDeleteAsync(string queue, bool ifUnUsed, bool ifEmpty)
+    {
+        var queueInstance = Queues.TryGetValue(queue, out var result) ? result : null;
+        if (queueInstance is null)
+        {
+            throw new ArgumentException($"Queue {queue} not found.");
+        }
+        if (ifUnUsed && await queueInstance.ConsumerCountAsync() > 0)
+        {
+            throw new ArgumentException($"Queue {queue} is in use.");
+        }
+        if (ifEmpty && await queueInstance.CountAsync() > 0)
+        {
+            throw new ArgumentException($"Queue {queue} is not empty.");
+        }
+
+        // now remove the queus from the server
+        Queues.Remove(queue);
+
+        // let all exchanges know that the queue has been deleted.
+        Exchanges.Values
+            .ToList()
+            .ForEach(xchg => xchg.HandleQueueDeleted(queue));
+
+        // remove the consumer bindinga and notify the consumers.
+        await queueInstance.RemoveAndNontifyConsumersAsync();
+        return await queueInstance.PurgeMessagesAsync();
+    }
+
+    internal async ValueTask<QueueDeclareOk> QueueDeclarePassiveAsync(string queue)
+    { 
+        var queueInstance = Queues.TryGetValue(queue, out var result) ? result : null;
+        if (queueInstance is null)
+        {
+            throw new ArgumentException($"Queue {queue} not found.");
+        }
+        var consumerCount = await queueInstance.ConsumerCountAsync();
+        var messageCount = await queueInstance.CountAsync();
+        return new QueueDeclareOk(queue, messageCount, (uint)consumerCount);
+    }
+
+    internal async ValueTask<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false)
     {
         if (Queues.ContainsKey(queue))
         {
-            throw new ArgumentException($"Queue {queue} already exists.");
+            if (!passive)
+            { 
+                throw new ArgumentException($"Queue {queue} already exists.");
+            }
+
+            var queueInstance = Queues.TryGetValue(queue, out var result) ? result : null;
+            if (queueInstance is null)
+            {
+                throw new ArgumentException($"Queue {queue} not found.");
+            }
+            var consumerCount = await queueInstance.ConsumerCountAsync();
+            var messageCount = await queueInstance.CountAsync();
+            return new QueueDeclareOk(queue, messageCount, (uint)consumerCount);
         }
+
         var newQueue = new RabbitQueue(queue)
         {
             IsDurable = durable,
             IsExclusive = exclusive,
             AutoDelete = autoDelete
         };
-        foreach (var argument in arguments)
+        if (arguments is { Count: > 0 })
         {
-            newQueue.Arguments.Add(argument);
+            arguments.ToList().ForEach(newQueue.Arguments.Add);
         }
         Queues.Add(queue, newQueue);
-        return ValueTask.CompletedTask;
+        return new QueueDeclareOk(queue, 0, 0);
     }
 
     internal ValueTask<Exchange?> GetExchangeAsync(string exchange)
     {
         return ValueTask.FromResult<Exchange?>(Exchanges.TryGetValue(exchange, out var result) ? result : null);
+    }
+
+    internal async ValueTask<bool> ExchangeDeleteAsync(string exchange, bool ifUnused = false)
+    {
+        var exchangeInstance = Exchanges.TryGetValue(exchange, out var result) ? result : null;
+        if (exchangeInstance is null)
+        {
+            throw new ArgumentException($"Exchange {exchange} not found.");
+        }
+
+        // if the exchange has bound quues, and ifUnused is true, we cannot delete it.
+        if (ifUnused && exchangeInstance.HasBindings)
+        {
+            return false;
+        }
+
+        // okay, now we delete the exchange.
+        await ExchangeDeleteAsync(exchangeInstance);
+
+        // the exchange has been deleted. now we need to remove the exchange from
+        // all exchange bindings that have the deleted exchange as destination.
+        Exchanges.Values
+            .ToList()
+            .ForEach(xchg => xchg.HandleExchangeDeleted(exchange));
+
+        // finally we need to remove all exchanges and queues that are bound to this exchange.
+        await exchangeInstance.RemoveAllBindings();
+
+        return true;
     }
 
     internal ValueTask<bool> ExchangeDeleteAsync(Exchange exchange)
@@ -86,10 +192,14 @@ internal class RabbitMQServer
         return ValueTask.FromResult(false);
     }
 
-    internal ValueTask ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?> arguments)
+    internal ValueTask ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false)
     {
         if (Exchanges.ContainsKey(exchange))
         {
+            if (passive)
+            {
+                return ValueTask.CompletedTask;
+            }
             throw new ArgumentException($"Exchange {exchange} already exists.");
         }
         var newExchange = type switch
@@ -252,7 +362,7 @@ internal class RabbitMQServer
         return true;
     }
 
-    internal async ValueTask<bool> SendToDeadLetterQueueIfApplicable(RabbitQueue origin, RabbitMessage message)
+    internal async ValueTask<bool> SendToDeadLetterQueueIfExists(RabbitQueue origin, RabbitMessage message)
     {
         if (origin.Arguments is not { Count: > 0 })
         {

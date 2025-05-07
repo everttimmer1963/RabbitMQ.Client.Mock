@@ -4,9 +4,10 @@ using RabbitMQ.Client.Mock.Domain;
 namespace RabbitMQ.Client.Mock;
 internal class FakeChannel : IChannel
 {
+    private bool _disposed;
     private readonly RabbitMQServer _server;
     private readonly CreateChannelOptions? _options;
-
+    
     private static int _lastChannelNumber = 0;
     private static int GetNextChannelNumber()
     { 
@@ -126,7 +127,7 @@ internal class FakeChannel : IChannel
             Immediate = true,
             BasicProperties = basicProperties,
             Body = body.ToArray(),
-            DeliveryTag = 0,
+            DeliveryTag = await GetNextDeliveryTagAsync(),
         };
         var exchangeInstance = await _server.GetExchangeAsync(exchange);
         if (exchangeInstance is null)
@@ -147,99 +148,157 @@ internal class FakeChannel : IChannel
         return Task.CompletedTask;
     }
 
-    public ValueTask BasicRejectAsync(ulong deliveryTag, bool requeue, CancellationToken cancellationToken = default)
+    public async ValueTask BasicRejectAsync(ulong deliveryTag, bool requeue, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        await _server.RejectMessageAsync(deliveryTag, false, requeue);
     }
 
-    public Task CloseAsync(ushort replyCode, string replyText, bool abort, CancellationToken cancellationToken = default)
+    public async Task CloseAsync(ushort replyCode, string replyText, bool abort, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        CloseReason = new ShutdownEventArgs(ShutdownInitiator.Application, replyCode, replyText, cancellationToken: cancellationToken);
+        await _channelShutdownAsyncWrapper.InvokeAsync(this, CloseReason);
+        IsClosed = true;
+        IsOpen = false;
     }
 
-    public Task CloseAsync(ShutdownEventArgs reason, bool abort, CancellationToken cancellationToken = default)
+    public async Task CloseAsync(ShutdownEventArgs reason, bool abort, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        CloseReason = reason;
+        await _channelShutdownAsyncWrapper.InvokeAsync(this, reason);
+        IsClosed = true;
+        IsOpen = false;
     }
 
-    public Task<uint> ConsumerCountAsync(string queue, CancellationToken cancellationToken = default)
+    public async Task<uint> ConsumerCountAsync(string queue, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var queueInstance = await _server.GetQueueAsync(queue);
+        if(queueInstance is null)
+        {
+            throw new ArgumentException($"Queue {queue} does not exist.");
+        }
+        return (uint)await queueInstance.ConsumerCountAsync();
     }
 
     public void Dispose()
     {
-        throw new NotImplementedException();
+        _disposed = true;
     }
 
     public ValueTask DisposeAsync()
     {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+    {
+        var sourceInstance = await _server.GetExchangeAsync(source);
+        if (sourceInstance is null)
+        {
+            throw new ArgumentException($"Exchange {source} does not exist.");
+        }
+        await sourceInstance.BindExchangeAsync(destination, routingKey, arguments);
         throw new NotImplementedException();
     }
 
-    public Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        await _server.ExchangeDeclareAsync(exchange, type, durable, autoDelete, arguments, passive);
     }
 
-    public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var exchangeInstance = await _server.GetExchangeAsync(exchange);
+        if (exchangeInstance is null)
+        {
+            throw new ArgumentException($"Exchange {exchange} does not exist.");
+        }
     }
 
-    public Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default)
+    public async Task ExchangeDeleteAsync(string exchange, bool ifUnused = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        await _server.ExchangeDeleteAsync(exchange, ifUnused);
     }
 
-    public Task ExchangeDeleteAsync(string exchange, bool ifUnused = false, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
-    }
-
-    public Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException();
+        var sourceInstance = await _server.GetExchangeAsync(source);
+        if(sourceInstance is null)
+        {
+            throw new ArgumentException($"Exchange {source} does not exist.");
+        }
+        await sourceInstance.UnbindExchangeAsync(destination, routingKey);
     }
 
     public ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return _server.GetNextPublishSequenceNumber();
     }
 
-    public Task<uint> MessageCountAsync(string queue, CancellationToken cancellationToken = default)
+    public async Task<uint> MessageCountAsync(string queue, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var queueInstance = await _server.GetQueueAsync(queue);
+        if (queueInstance is null)
+        {
+            throw new ArgumentException($"Queue {queue} does not exist.");
+        }
+        return await queueInstance.CountAsync();
     }
 
-    public Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var exchangeInstance = _server.GetExchangeAsync(exchange).Result;
+        if (exchangeInstance is null)
+        {
+            throw new ArgumentException($"Exchange {exchange} does not exist.");
+        }
+        var queueInstance = _server.GetQueueAsync(queue).Result;
+        if (queueInstance is null)
+        {
+            throw new ArgumentException($"Queue {queue} does not exist.");
+        }
+        await exchangeInstance.BindQueueAsync(routingKey, queueInstance, arguments);
     }
 
-    public Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return await _server.QueueDeclareAsync(queue, durable, exclusive, autoDelete, arguments, passive);
     }
 
-    public Task<QueueDeclareOk> QueueDeclarePassiveAsync(string queue, CancellationToken cancellationToken = default)
+    public async Task<QueueDeclareOk> QueueDeclarePassiveAsync(string queue, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return await _server.QueueDeclarePassiveAsync(queue);
     }
 
-    public Task<uint> QueueDeleteAsync(string queue, bool ifUnused, bool ifEmpty, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task<uint> QueueDeleteAsync(string queue, bool ifUnused, bool ifEmpty, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return await _server.QueueDeleteAsync(queue, ifUnused, ifEmpty);
     }
 
-    public Task<uint> QueuePurgeAsync(string queue, CancellationToken cancellationToken = default)
+    public async Task<uint> QueuePurgeAsync(string queue, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var queueInstance = await _server.GetQueueAsync(queue);
+        if(queueInstance is null)
+        {
+            throw new ArgumentException($"Queue {queue} does not exist.");
+        }
+        return await queueInstance.PurgeMessagesAsync();
     }
 
-    public Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
+    public async Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var queueInstance = await _server.GetQueueAsync(queue);
+        if (queueInstance is null)
+        {
+            throw new ArgumentException($"Queue {queue} does not exist.");
+        }
+        var exchangeInstancee = await _server.GetExchangeAsync(exchange);
+        if (exchangeInstancee is null)
+        {
+            throw new ArgumentException($"Exchange {exchange} does not exist.");
+        }
+
+        await exchangeInstancee.UnbindQueueAsync(routingKey, queueInstance);
     }
 
     public Task TxCommitAsync(CancellationToken cancellationToken = default)
@@ -255,5 +314,10 @@ internal class FakeChannel : IChannel
     public Task TxSelectAsync(CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
+    }
+
+    private async ValueTask<ulong> GetNextDeliveryTagAsync()
+    {
+        return await _server.GetNextDeliveryTagAsync(channelNumber: ChannelNumber);
     }
 }
