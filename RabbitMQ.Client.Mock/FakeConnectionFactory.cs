@@ -34,8 +34,6 @@ internal class FakeConnectionFactory : IConnectionFactory
 
     private FakeConnection? _connection;
 
-    private RabbitMQServer Server => RabbitMQServer.GetInstance();
-
     public IDictionary<string, object?> ClientProperties { get; set; } = DefaultClientProperties;
     public string Password { get; set; } = DefaultPass;
     public ushort RequestedChannelMax { get; set; } = DefaultChannelMax;

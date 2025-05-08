@@ -1,18 +1,10 @@
 ﻿using RabbitMQ.Client.Mock.Domain;
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 
 namespace RabbitMQ.Client.Mock;
 
 internal class RabbitMQServer
 {
-    private readonly DirectExchange DefaultExchange = new DirectExchange(string.Empty)
-    {
-        IsDurable = false,
-        AutoDelete = false
-    };
-
-    private static readonly object _instanceLock = new();
     private static RabbitMQServer? _instance;
     private ulong _lastPublishSequenceNumber = 1;
     private SemaphoreSlim _deliveryTagsSemaphore = new(1, 1);
@@ -86,17 +78,23 @@ internal class RabbitMQServer
             throw new ArgumentException($"Queue {queue} is not empty.");
         }
 
-        // now remove the queus from the server
+        // remove the queus from the server
         Queues.Remove(queue);
 
-        // let all exchanges know that the queue has been deleted.
+        // let all exchanges know that the queue has been deleted,
+        // so they can remove bindings to the queue, if any.
         Exchanges.Values
+            .Where(xchg => xchg.HasBindings)
             .ToList()
             .ForEach(xchg => xchg.HandleQueueDeleted(queue));
 
-        // remove the consumer bindinga and notify the consumers.
-        await queueInstance.RemoveAndNontifyConsumersAsync();
-        return await queueInstance.PurgeMessagesAsync();
+        // get the current count of messages in the queue for reporting purposes.
+        var msgCount = await queueInstance.CountAsync();
+
+        // dispose the queue.
+        await queueInstance.DisposeAsync();
+
+        return msgCount;
     }
 
     internal async ValueTask<QueueDeclareOk> QueueDeclarePassiveAsync(string queue)
@@ -111,8 +109,10 @@ internal class RabbitMQServer
         return new QueueDeclareOk(queue, messageCount, (uint)consumerCount);
     }
 
-    internal async ValueTask<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false)
+    internal async ValueTask<QueueDeclareOk> QueueDeclareAsync(int connectionNumber, string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false)
     {
+        var serverGeneratedName = false;
+
         // if an empty string is passed in for queue name, the server creates a name.
         // this is only valid for classic queues
         if (queue == string.Empty)
@@ -126,16 +126,12 @@ internal class RabbitMQServer
 
             // assign a server generated name to the queue.
             queue = $"sgq.{Guid.NewGuid().ToString("N")}";
+            serverGeneratedName = true;
         }
 
         // chekc if the queue exists. if it does, report the message and consuemr count.
         if (Queues.ContainsKey(queue))
         {
-            if (!passive)
-            {
-                throw new ArgumentException($"Queue {queue} already exists.");
-            }
-
             var queueInstance = Queues.TryGetValue(queue, out var result) ? result : null;
             if (queueInstance is null)
             {
@@ -147,11 +143,12 @@ internal class RabbitMQServer
         }
 
         // create a new queue and report back.
-        var newQueue = new RabbitQueue(queue)
+        var newQueue = new RabbitQueue(queue, serverGeneratedName)
         {
             IsDurable = durable,
             IsExclusive = exclusive,
-            AutoDelete = autoDelete
+            AutoDelete = autoDelete,
+            Connection = connectionNumber
         };
         if (arguments is { Count: > 0 })
         {
@@ -412,5 +409,18 @@ internal class RabbitMQServer
         return type.Equals(expectedType, StringComparison.OrdinalIgnoreCase)
             ? ValueTask.FromResult(true)
             : ValueTask.FromResult(false);
+    }
+
+    internal async ValueTask HandleDisconnectAsync(int connectionNumber)
+    {
+        // queues that are exclusive are deleted when the connection that created them is closed.
+        var exclusiveQueues = Queues.Values
+            .Where(queue => queue.IsExclusive && queue.Connection == connectionNumber)
+            .ToList();
+
+        foreach (var queue in exclusiveQueues)
+        {
+            await QueueDeleteAsync(queue.Name, false, false);
+        }
     }
 }

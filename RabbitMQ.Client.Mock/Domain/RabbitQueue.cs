@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 
 namespace RabbitMQ.Client.Mock.Domain;
-internal class RabbitQueue
+internal class RabbitQueue : IAsyncDisposable
 {
     #region Types
     class Consumer
@@ -14,6 +14,8 @@ internal class RabbitQueue
     }
     #endregion
 
+    private bool _disposed;
+
     private readonly ConcurrentDictionary<string, Consumer> _consumers = new();
     private readonly ConcurrentQueue<RabbitMessage> _queue = new();
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
@@ -21,9 +23,10 @@ internal class RabbitQueue
     private AutoResetEvent _messageAvailable = new AutoResetEvent(true);
     private CancellationTokenSource _tokenSource;
 
-    public RabbitQueue(string name)
+    public RabbitQueue(string name, bool nameIsServerAssigned)
     {
         Name = name;
+        HasServerGeneratedName = nameIsServerAssigned;
         _tokenSource = new CancellationTokenSource();
         Task.Run(() => MessageDeliveryLoopAsync(_tokenSource.Token));
     }
@@ -37,7 +40,11 @@ internal class RabbitQueue
 
     public bool IsExclusive { get; set; }
 
+    public int Connection { get; set; }
+
     public bool AutoDelete { get; set; }
+
+    public bool HasServerGeneratedName { get; set; }
 
     public IDictionary<string, object?> Arguments { get; } = new Dictionary<string, object?>();
 
@@ -203,15 +210,6 @@ internal class RabbitQueue
         return ValueTask.FromResult(true);
     }
 
-    private ValueTask<List<RabbitMessage>> RemovePendingMessagesAsync(ulong deliveryTag)
-    {
-        if (_pendingMessages.TryRemove(deliveryTag, out var messages))
-        {
-            return ValueTask.FromResult(messages);
-        }
-        return ValueTask.FromResult(new List<RabbitMessage>());
-    }
-
     private async ValueTask MessageDeliveryLoopAsync(CancellationToken cancellationToken)
     {
         while (true)
@@ -264,6 +262,27 @@ internal class RabbitQueue
                 }
             }
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+
+        // cancel the message delivery loop
+        _tokenSource.Cancel();
+        _tokenSource.Dispose();
+        _messageAvailable.Dispose();
+        _semaphore.Dispose();
+
+        // remove all consumers from the queue.
+        await RemoveAndNontifyConsumersAsync();
+
+        // remove all messages from the queue.
+        await PurgeMessagesAsync();
     }
     #endregion
 }

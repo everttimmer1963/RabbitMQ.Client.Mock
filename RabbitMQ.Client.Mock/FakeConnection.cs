@@ -2,14 +2,19 @@
 
 namespace RabbitMQ.Client.Mock;
 
-internal class FakeConnection : IConnection
+internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 {
+    private static int _lastConnectionNumber;
+
+    private bool _disposed;
+    private int _connectionNumber;
     private readonly FakeConnectionOptions _options;
     private readonly List<IChannel> _channels = new();
 
     public FakeConnection(FakeConnectionOptions options)
     {
         _options = options;
+        _connectionNumber = GetNextConnectionNumber();8
     }
 
     private RabbitMQServer Server => RabbitMQServer.GetInstance();
@@ -73,19 +78,34 @@ internal class FakeConnection : IConnection
         return Task.FromResult<IChannel>(channel);
     }
 
-    public void Dispose()
-    {
-        // nothing to dispose
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        Dispose();
-        return ValueTask.CompletedTask;
-    }
-
     public Task UpdateSecretAsync(string newSecret, string reason, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
+    }
+
+    private static int GetNextConnectionNumber()
+    {
+        return Interlocked.Increment(ref _lastConnectionNumber);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        Task.Run(async () => await DisposeAsync());
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _channels.ForEach(async ch => await ch.DisposeAsync());
+        _channels.Clear();
+        await Server.HandleDisconnectAsync();
     }
 }

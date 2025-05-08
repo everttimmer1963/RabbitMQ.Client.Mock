@@ -2,7 +2,7 @@
 using RabbitMQ.Client.Mock.Domain;
 
 namespace RabbitMQ.Client.Mock;
-internal class FakeChannel : IChannel
+internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
 {
     private bool _disposed;
     private readonly CreateChannelOptions? _options;
@@ -13,13 +13,16 @@ internal class FakeChannel : IChannel
         return Interlocked.Increment(ref _lastChannelNumber);
     }
 
-    public FakeChannel(CreateChannelOptions? options)
+    public FakeChannel(CreateChannelOptions? options, int connectionNumber)
     {
         _options = options;
         ChannelNumber = GetNextChannelNumber();
+        ConnectionNumber = connectionNumber;
     }
 
     private RabbitMQServer Server => RabbitMQServer.GetInstance();
+
+    public int ConnectionNumber { get; private set; }
 
     public int ChannelNumber { get; private set; }
 
@@ -194,17 +197,6 @@ internal class FakeChannel : IChannel
         return (uint)await queueInstance.ConsumerCountAsync();
     }
 
-    public void Dispose()
-    {
-        _disposed = true;
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        Dispose();
-        return ValueTask.CompletedTask;
-    }
-
     public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
         var sourceInstance = await Server.GetExchangeAsync(source);
@@ -276,7 +268,7 @@ internal class FakeChannel : IChannel
 
     public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        return await Server.QueueDeclareAsync(queue, durable, exclusive, autoDelete, arguments, passive);
+        return await Server.QueueDeclareAsync(ConnectionNumber, queue, durable, exclusive, autoDelete, arguments, passive);
     }
 
     public async Task<QueueDeclareOk> QueueDeclarePassiveAsync(string queue, CancellationToken cancellationToken = default)
@@ -333,5 +325,16 @@ internal class FakeChannel : IChannel
     private async ValueTask<ulong> GetNextDeliveryTagAsync()
     {
         return await Server.GetNextDeliveryTagAsync(channelNumber: ChannelNumber);
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 }
