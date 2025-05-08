@@ -32,13 +32,9 @@ internal class FakeConnectionFactory : IConnectionFactory
         ["information"] = Encoding.UTF8.GetBytes("Licensed under the MPL. See https://www.rabbitmq.com/")
     };
 
-    private RabbitMQServer _server;
     private FakeConnection? _connection;
 
-    public FakeConnectionFactory()
-    {
-        this._server = RabbitMQServer.GetInstance(); ;
-    }
+    private RabbitMQServer Server => RabbitMQServer.GetInstance();
 
     public IDictionary<string, object?> ClientProperties { get; set; } = DefaultClientProperties;
     public string Password { get; set; } = DefaultPass;

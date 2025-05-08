@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RabbitMQ.Client.Mock", "Rab
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RabbitMQ.Client.Mock.Tests", "RabbitMQ.Client.Mock.Tests\RabbitMQ.Client.Mock.Tests.csproj", "{B3E14D17-811F-4CBA-AD33-78D9CD6DB4E0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RabbitMQ.Client.Tests", "RabbitMQ.Client.Tests\RabbitMQ.Client.Tests.csproj", "{5D48B490-9070-457C-B05B-85C9BCE1453D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{B3E14D17-811F-4CBA-AD33-78D9CD6DB4E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B3E14D17-811F-4CBA-AD33-78D9CD6DB4E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B3E14D17-811F-4CBA-AD33-78D9CD6DB4E0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5D48B490-9070-457C-B05B-85C9BCE1453D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D48B490-9070-457C-B05B-85C9BCE1453D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D48B490-9070-457C-B05B-85C9BCE1453D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D48B490-9070-457C-B05B-85C9BCE1453D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

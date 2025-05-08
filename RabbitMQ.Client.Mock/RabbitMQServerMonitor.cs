@@ -2,9 +2,7 @@
 
 public class RabbitMQServerMonitor
 {
-    private RabbitMQServer? _server;
-
-    private RabbitMQServer Server => _server ??= RabbitMQServer.GetInstance();
+    private RabbitMQServer Server => RabbitMQServer.GetInstance();
 
     /// <summary>
     /// Indicates whether the queue specified with <paramref name="queueName"/> exists.

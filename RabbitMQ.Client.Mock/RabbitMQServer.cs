@@ -40,11 +40,6 @@ internal class RabbitMQServer
         return _instance;
     }
 
-    private RabbitMQServer()
-    {
-        Exchanges.Add(DefaultExchange.Name, DefaultExchange);
-    }
-
     internal async ValueTask<ulong> GetNextDeliveryTagAsync(int channelNumber)
     {
         await _deliveryTagsSemaphore.WaitAsync();
@@ -118,10 +113,26 @@ internal class RabbitMQServer
 
     internal async ValueTask<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false)
     {
+        // if an empty string is passed in for queue name, the server creates a name.
+        // this is only valid for classic queues
+        if (queue == string.Empty)
+        {
+            // check if this ia a classic queue. if not, throw an exception.
+            var isClassicQueue = await ConfirmQueueType("classic", arguments);
+            if (!isClassicQueue)
+            { 
+                throw new ArgumentException("Queue name cannot be null or empty for non-classic queues.", nameof(queue));
+            }
+
+            // assign a server generated name to the queue.
+            queue = $"sgq.{Guid.NewGuid().ToString("N")}";
+        }
+
+        // chekc if the queue exists. if it does, report the message and consuemr count.
         if (Queues.ContainsKey(queue))
         {
             if (!passive)
-            { 
+            {
                 throw new ArgumentException($"Queue {queue} already exists.");
             }
 
@@ -135,6 +146,7 @@ internal class RabbitMQServer
             return new QueueDeclareOk(queue, messageCount, (uint)consumerCount);
         }
 
+        // create a new queue and report back.
         var newQueue = new RabbitQueue(queue)
         {
             IsDurable = durable,
@@ -209,9 +221,9 @@ internal class RabbitMQServer
         };
         newExchange.IsDurable = durable;
         newExchange.AutoDelete = autoDelete;
-        foreach (var argument in arguments)
+        if (arguments is { Count: > 0 })
         {
-            newExchange.Arguments.Add(argument);
+            arguments.ToList().ForEach(newExchange.Arguments.Add);
         }
         Exchanges.Add(exchange, newExchange);
         return ValueTask.CompletedTask;
@@ -389,4 +401,16 @@ internal class RabbitMQServer
         return true;
     }
 
+    private ValueTask<bool> ConfirmQueueType(string expectedType, IDictionary<string, object?>? arguments)
+    {
+        var type = (arguments is null)
+            ? "classic"
+            : arguments.TryGetValue("x-queue-type", out var result) 
+                ? result?.ToString()?.ToLowerInvariant() ?? "classic"
+                : "classic";
+
+        return type.Equals(expectedType, StringComparison.OrdinalIgnoreCase)
+            ? ValueTask.FromResult(true)
+            : ValueTask.FromResult(false);
+    }
 }

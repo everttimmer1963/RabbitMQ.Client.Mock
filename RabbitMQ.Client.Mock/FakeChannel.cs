@@ -5,7 +5,6 @@ namespace RabbitMQ.Client.Mock;
 internal class FakeChannel : IChannel
 {
     private bool _disposed;
-    private readonly RabbitMQServer _server;
     private readonly CreateChannelOptions? _options;
     
     private static int _lastChannelNumber = 0;
@@ -16,10 +15,11 @@ internal class FakeChannel : IChannel
 
     public FakeChannel(CreateChannelOptions? options)
     {
-        _server = RabbitMQServer.GetInstance();
         _options = options;
         ChannelNumber = GetNextChannelNumber();
     }
+
+    private RabbitMQServer Server => RabbitMQServer.GetInstance();
 
     public int ChannelNumber { get; private set; }
 
@@ -65,18 +65,18 @@ internal class FakeChannel : IChannel
     {
         if (multiple)
         {
-            while (await _server.ConfirmMessageAsync(deliveryTag))
+            while (await Server.ConfirmMessageAsync(deliveryTag))
             {
                 deliveryTag--;
             }
             return;
         }
-        await _server.ConfirmMessageAsync(deliveryTag);
+        await Server.ConfirmMessageAsync(deliveryTag);
     }
 
     public async Task BasicCancelAsync(string consumerTag, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        var consumer = await _server.UnregisterConsumerAsync(consumerTag);
+        var consumer = await Server.UnregisterConsumerAsync(consumerTag);
         if (consumer is null)
         {
             throw new ArgumentException($"Consumer {consumerTag} not found.");
@@ -86,13 +86,13 @@ internal class FakeChannel : IChannel
 
     public async Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
     {
-        await _server.RegisterConsumerAsync(consumerTag, queue, autoAck, arguments, consumer);
+        await Server.RegisterConsumerAsync(consumerTag, queue, autoAck, arguments, consumer);
         return consumerTag;
     }
 
     public async Task<BasicGetResult?> BasicGetAsync(string queue, bool autoAck, CancellationToken cancellationToken = default)
     {
-        var queueInstance = await _server.GetQueueAsync(queue);
+        var queueInstance = await Server.GetQueueAsync(queue);
         if (queueInstance is null)
         {
             throw new ArgumentException($"Queue {queue} not found.");
@@ -114,7 +114,7 @@ internal class FakeChannel : IChannel
 
     public async ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default)
     {
-        await _server.RejectMessageAsync(deliveryTag, multiple, requeue);
+        await Server.RejectMessageAsync(deliveryTag, multiple, requeue);
     }
 
     public async ValueTask BasicPublishAsync<TProperties>(string exchange, string routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default) where TProperties : IReadOnlyBasicProperties, IAmqpHeader
@@ -129,7 +129,22 @@ internal class FakeChannel : IChannel
             Body = body.ToArray(),
             DeliveryTag = await GetNextDeliveryTagAsync(),
         };
-        var exchangeInstance = await _server.GetExchangeAsync(exchange);
+
+        // check the exchange, if the exchange is an empty string, we need to publish to a queue with the name
+        // specified in routingkey
+        if (exchange == string.Empty)
+        { 
+            var queueInstance = await Server.GetQueueAsync(routingKey);
+            if (queueInstance is null)
+            {
+                throw new ArgumentException($"Queue {routingKey} not found.");
+            }
+            await queueInstance.PublishMessageAsync(message);
+            return;
+        }
+
+        // we need to publish to an exchange. the routingkey will have the bindingkey for the bound queues.
+        var exchangeInstance = await Server.GetExchangeAsync(exchange);
         if (exchangeInstance is null)
         {
             throw new ArgumentException($"Exchange {exchange} not found.");
@@ -150,7 +165,7 @@ internal class FakeChannel : IChannel
 
     public async ValueTask BasicRejectAsync(ulong deliveryTag, bool requeue, CancellationToken cancellationToken = default)
     {
-        await _server.RejectMessageAsync(deliveryTag, false, requeue);
+        await Server.RejectMessageAsync(deliveryTag, false, requeue);
     }
 
     public async Task CloseAsync(ushort replyCode, string replyText, bool abort, CancellationToken cancellationToken = default)
@@ -171,7 +186,7 @@ internal class FakeChannel : IChannel
 
     public async Task<uint> ConsumerCountAsync(string queue, CancellationToken cancellationToken = default)
     {
-        var queueInstance = await _server.GetQueueAsync(queue);
+        var queueInstance = await Server.GetQueueAsync(queue);
         if(queueInstance is null)
         {
             throw new ArgumentException($"Queue {queue} does not exist.");
@@ -192,23 +207,22 @@ internal class FakeChannel : IChannel
 
     public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        var sourceInstance = await _server.GetExchangeAsync(source);
+        var sourceInstance = await Server.GetExchangeAsync(source);
         if (sourceInstance is null)
         {
             throw new ArgumentException($"Exchange {source} does not exist.");
         }
         await sourceInstance.BindExchangeAsync(destination, routingKey, arguments);
-        throw new NotImplementedException();
     }
 
     public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        await _server.ExchangeDeclareAsync(exchange, type, durable, autoDelete, arguments, passive);
+        await Server.ExchangeDeclareAsync(exchange, type, durable, autoDelete, arguments, passive);
     }
 
     public async Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default)
     {
-        var exchangeInstance = await _server.GetExchangeAsync(exchange);
+        var exchangeInstance = await Server.GetExchangeAsync(exchange);
         if (exchangeInstance is null)
         {
             throw new ArgumentException($"Exchange {exchange} does not exist.");
@@ -217,12 +231,12 @@ internal class FakeChannel : IChannel
 
     public async Task ExchangeDeleteAsync(string exchange, bool ifUnused = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        await _server.ExchangeDeleteAsync(exchange, ifUnused);
+        await Server.ExchangeDeleteAsync(exchange, ifUnused);
     }
 
     public async Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        var sourceInstance = await _server.GetExchangeAsync(source);
+        var sourceInstance = await Server.GetExchangeAsync(source);
         if(sourceInstance is null)
         {
             throw new ArgumentException($"Exchange {source} does not exist.");
@@ -232,12 +246,12 @@ internal class FakeChannel : IChannel
 
     public ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default)
     {
-        return _server.GetNextPublishSequenceNumber();
+        return Server.GetNextPublishSequenceNumber();
     }
 
     public async Task<uint> MessageCountAsync(string queue, CancellationToken cancellationToken = default)
     {
-        var queueInstance = await _server.GetQueueAsync(queue);
+        var queueInstance = await Server.GetQueueAsync(queue);
         if (queueInstance is null)
         {
             throw new ArgumentException($"Queue {queue} does not exist.");
@@ -247,12 +261,12 @@ internal class FakeChannel : IChannel
 
     public async Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        var exchangeInstance = _server.GetExchangeAsync(exchange).Result;
+        var exchangeInstance = Server.GetExchangeAsync(exchange).Result;
         if (exchangeInstance is null)
         {
             throw new ArgumentException($"Exchange {exchange} does not exist.");
         }
-        var queueInstance = _server.GetQueueAsync(queue).Result;
+        var queueInstance = Server.GetQueueAsync(queue).Result;
         if (queueInstance is null)
         {
             throw new ArgumentException($"Queue {queue} does not exist.");
@@ -262,22 +276,22 @@ internal class FakeChannel : IChannel
 
     public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        return await _server.QueueDeclareAsync(queue, durable, exclusive, autoDelete, arguments, passive);
+        return await Server.QueueDeclareAsync(queue, durable, exclusive, autoDelete, arguments, passive);
     }
 
     public async Task<QueueDeclareOk> QueueDeclarePassiveAsync(string queue, CancellationToken cancellationToken = default)
     {
-        return await _server.QueueDeclarePassiveAsync(queue);
+        return await Server.QueueDeclarePassiveAsync(queue);
     }
 
     public async Task<uint> QueueDeleteAsync(string queue, bool ifUnused, bool ifEmpty, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        return await _server.QueueDeleteAsync(queue, ifUnused, ifEmpty);
+        return await Server.QueueDeleteAsync(queue, ifUnused, ifEmpty);
     }
 
     public async Task<uint> QueuePurgeAsync(string queue, CancellationToken cancellationToken = default)
     {
-        var queueInstance = await _server.GetQueueAsync(queue);
+        var queueInstance = await Server.GetQueueAsync(queue);
         if(queueInstance is null)
         {
             throw new ArgumentException($"Queue {queue} does not exist.");
@@ -287,12 +301,12 @@ internal class FakeChannel : IChannel
 
     public async Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
     {
-        var queueInstance = await _server.GetQueueAsync(queue);
+        var queueInstance = await Server.GetQueueAsync(queue);
         if (queueInstance is null)
         {
             throw new ArgumentException($"Queue {queue} does not exist.");
         }
-        var exchangeInstancee = await _server.GetExchangeAsync(exchange);
+        var exchangeInstancee = await Server.GetExchangeAsync(exchange);
         if (exchangeInstancee is null)
         {
             throw new ArgumentException($"Exchange {exchange} does not exist.");
@@ -318,6 +332,6 @@ internal class FakeChannel : IChannel
 
     private async ValueTask<ulong> GetNextDeliveryTagAsync()
     {
-        return await _server.GetNextDeliveryTagAsync(channelNumber: ChannelNumber);
+        return await Server.GetNextDeliveryTagAsync(channelNumber: ChannelNumber);
     }
 }

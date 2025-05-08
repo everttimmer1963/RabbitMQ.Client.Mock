@@ -4,15 +4,15 @@ namespace RabbitMQ.Client.Mock;
 
 internal class FakeConnection : IConnection
 {
-    private readonly RabbitMQServer _server;
     private readonly FakeConnectionOptions _options;
     private readonly List<IChannel> _channels = new();
 
     public FakeConnection(FakeConnectionOptions options)
     {
-        _server = RabbitMQServer.GetInstance();
         _options = options;
     }
+
+    private RabbitMQServer Server => RabbitMQServer.GetInstance();
 
     public ushort ChannelMax => _options.ChannelMax;
 

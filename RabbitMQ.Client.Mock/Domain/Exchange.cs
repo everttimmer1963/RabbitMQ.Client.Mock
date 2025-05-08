@@ -4,9 +4,8 @@ namespace RabbitMQ.Client.Mock.Domain;
 
 internal abstract class Exchange(string name, string type)
 {
-    protected readonly RabbitMQServer _server = RabbitMQServer.GetInstance();
-
     #region Properties
+    protected RabbitMQServer Server => RabbitMQServer.GetInstance();
     public string Name { get; set; } = name;
     public string Type { get; set; } = type;
     public bool IsDurable { get; set; }
@@ -20,7 +19,7 @@ internal abstract class Exchange(string name, string type)
     #region Exchange Bindings
     public virtual async ValueTask BindExchangeAsync(string exchange, string routingKey, IDictionary<string, object?>? arguments = null)
     {
-        var exchangeInstance = await _server.GetExchangeAsync(exchange);
+        var exchangeInstance = await Server.GetExchangeAsync(exchange);
         if (exchangeInstance == null)
         {
             throw new ArgumentException($"Exchange {exchange} does not exist.");
@@ -195,7 +194,7 @@ internal abstract class Exchange(string name, string type)
         }
         if (published)
         {
-            await _server.GetNextPublishSequenceNumber();
+            await Server.GetNextPublishSequenceNumber();
         }
         return published;
     }
@@ -206,7 +205,7 @@ internal abstract class Exchange(string name, string type)
     {
         if (QueueBindings.Count == 0 && ExchangeBindings.Count == 0 && AutoDelete)
         {
-            await _server.ExchangeDeleteAsync(this);
+            await Server.ExchangeDeleteAsync(this);
         }
     }
 }

@@ -17,7 +17,6 @@ internal class RabbitQueue
     private readonly ConcurrentDictionary<string, Consumer> _consumers = new();
     private readonly ConcurrentQueue<RabbitMessage> _queue = new();
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
-    private readonly RabbitMQServer _server = RabbitMQServer.GetInstance();
     private readonly ConcurrentDictionary<ulong, List<RabbitMessage>> _pendingMessages = new();
     private AutoResetEvent _messageAvailable = new AutoResetEvent(true);
     private CancellationTokenSource _tokenSource;
@@ -28,6 +27,8 @@ internal class RabbitQueue
         _tokenSource = new CancellationTokenSource();
         Task.Run(() => MessageDeliveryLoopAsync(_tokenSource.Token));
     }
+
+    private RabbitMQServer Server => RabbitMQServer.GetInstance();
 
     #region Public Properties
     public string Name { get; set; }
@@ -76,7 +77,7 @@ internal class RabbitQueue
     {
         foreach (var consumer in _consumers.Values)
         {
-            var consumerInstance = await _server.GetConsumerAsync(consumer.ConsumerTag);
+            var consumerInstance = await Server.GetConsumerAsync(consumer.ConsumerTag);
             if (consumerInstance is not null)
             {
                 await consumerInstance.HandleBasicCancelAsync(consumer.ConsumerTag);
@@ -100,7 +101,7 @@ internal class RabbitQueue
         // with messages already in the queue.
         _messageAvailable.Set();
 
-        return await _server.AddConsumerBindingAsync(consumerTag, Name);
+        return await Server.AddConsumerBindingAsync(consumerTag, Name);
     }
 
     internal async ValueTask<bool> RemoveConsumerAsync(string consumerTag)
@@ -110,7 +111,7 @@ internal class RabbitQueue
         {
             throw new ArgumentException($"Consumer {consumerTag} not found.");
         }
-        return await _server.RemoveConsumerBindingAsync(consumerTag, Name);
+        return await Server.RemoveConsumerBindingAsync(consumerTag, Name);
     }
 
     internal ValueTask<bool> PublishMessageAsync(RabbitMessage message)
@@ -133,14 +134,14 @@ internal class RabbitQueue
         if (!autoAck && message is not null)
         {
             await AddPendingMessageAsync(message.DeliveryTag, message);
-            await _server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
+            await Server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
         }
         return message;
     }
 
     internal async ValueTask<bool> ConfirmMessageAsync(ulong deliveryTag)
     {
-        return await _server.RemovePendingMessageBindingAsync(deliveryTag, Name);
+        return await Server.RemovePendingMessageBindingAsync(deliveryTag, Name);
     }
 
     internal async ValueTask<List<RabbitMessage>?> RejectMessageAsync(ulong deliveryTag, bool multiple, bool requeue)
@@ -158,10 +159,10 @@ internal class RabbitQueue
 
         if (HasDeadLetterQueue)
         {
-            messages.ForEach(async message => await _server.SendToDeadLetterQueueIfExists(this, message));
+            messages.ForEach(async message => await Server.SendToDeadLetterQueueIfExists(this, message));
         }
 
-        await _server.RemovePendingMessageBindingAsync(deliveryTag, Name);
+        await Server.RemovePendingMessageBindingAsync(deliveryTag, Name);
 
         if (multiple)
         {
@@ -215,11 +216,18 @@ internal class RabbitQueue
     {
         while (true)
         {
-            // wait for messages to be available or for the process to be cancelled.
+            // wait for messages to become available or for the process to be cancelled.
             await _messageAvailable.WaitOneAsync(cancellationToken);
             if (cancellationToken.IsCancellationRequested)
             {
                 break;
+            }
+
+            // no need to dequeue messages if there are no consumers to process them so just
+            // return to the top of the loop when there are none.
+            if (_consumers.Count == 0)
+            {
+                continue;
             }
 
             // now deliver the message that are available to all listening consumers
@@ -237,7 +245,7 @@ internal class RabbitQueue
                 {
                     // get settings and instance for this consumer tag
                     var consumerSettings = _consumers[consumerTag];
-                    var consumerInstance = await _server.GetConsumerAsync(consumerTag);
+                    var consumerInstance = await Server.GetConsumerAsync(consumerTag);
 
                     await consumerInstance.HandleBasicDeliverAsync(
                         consumerTag,
@@ -251,7 +259,7 @@ internal class RabbitQueue
                     if (!consumerSettings.AutoAcknowledge)
                     {
                         await AddPendingMessageAsync(message.DeliveryTag, message);
-                        await _server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
+                        await Server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
                     }
                 }
             }
