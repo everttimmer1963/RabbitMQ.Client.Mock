@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using RabbitMQ.Client.Exceptions;
+using System.Text;
 
 namespace RabbitMQ.Client.Mock.Tests;
 
@@ -24,11 +25,52 @@ public class ClassicQueuesTests : TestBase
         await connection.DisposeAsync();
     }
 
+
+    [Fact]
+    public async Task When_Declaring_ClassicQueue_Without_QueueName_Then_Queue_With_ServerAssigned_QueueName_Is_Created()
+    {
+        // Locals
+        var queueName = string.Empty;
+
+        // Arrange
+        var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
+        var channel = await connection.CreateChannelAsync();
+
+        // Act
+        var result = await QueueDeclareAndBindAsync(channel, queueName, durable: false, exclusive: true, autoDelete: true);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(string.IsNullOrWhiteSpace(result.QueueName), $"Expected server assigned queue name, but a zero length string is returned.");
+    }
+
+
+    [Fact]
+    public async Task When_Declaring_QuorumQueue_Without_QueueName_Then_Exception_Is_Thrown()
+    {
+        // Locals
+        var queueName = string.Empty;
+        var arguments = new Dictionary<string, object?>() { { "x-queue-type", "quorum" } };
+
+        // Arrange
+        var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
+        var channel = await connection.CreateChannelAsync();
+
+        // Act
+        var act = async () =>
+        {
+            var result = await QueueDeclareAndBindAsync(channel, queueName, durable: false, exclusive: true, autoDelete: true, arguments: arguments);
+        };
+
+        // Assert
+        await Assert.ThrowsAsync<OperationInterruptedException>(act);
+    }
+
     [Fact]
     public async Task When_Declaring_Queue_And_Queueing_A_Message_Then_Queue_ShouldHave_One_Item()
     {
         // Locals
-        var queueName = "";
+        var queueName = "Hello";
 
         // Arrange
         var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
@@ -52,8 +94,8 @@ public class ClassicQueuesTests : TestBase
     public async Task When_Publishing_To_Exchange_With_Multiple_Queues_Bound_Then_All_Queues_Should_Have_The_Message()
     {
         // Locals
-        var queueName1 = "";
-        var queueName2 = "";
+        var queueName1 = "Hello1";
+        var queueName2 = "Hello2";
         var bindingKey = "messages";
         var exchangeName = "xchg-hello";
 
@@ -89,8 +131,8 @@ public class ClassicQueuesTests : TestBase
     public async Task When_Publishing_To_Exchange_Then_Message_Should_Be_Published_To_All_Bound_Exchanges_And_Queues()
     {
         // Locals
-        var queueName1 = "";
-        var queueName2 = "";
+        var queueName1 = "Hello1";
+        var queueName2 = "Hello2";
         var bindingKey = "messages";
         var exchangeName1 = "xchg-hello-1";
         var exchangeName2 = "xchg-hello-2";

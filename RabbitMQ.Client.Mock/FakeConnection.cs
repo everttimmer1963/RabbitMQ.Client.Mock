@@ -14,7 +14,7 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
     public FakeConnection(FakeConnectionOptions options)
     {
         _options = options;
-        _connectionNumber = GetNextConnectionNumber();8
+        _connectionNumber = GetNextConnectionNumber();
     }
 
     private RabbitMQServer Server => RabbitMQServer.GetInstance();
@@ -73,7 +73,7 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
     public Task<IChannel> CreateChannelAsync(CreateChannelOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var channel = new FakeChannel(options);
+        var channel = new FakeChannel(options, _connectionNumber);
         _channels.Add(channel);
         return Task.FromResult<IChannel>(channel);
     }
@@ -106,6 +106,6 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
         _channels.ForEach(async ch => await ch.DisposeAsync());
         _channels.Clear();
-        await Server.HandleDisconnectAsync();
+        await Server.HandleDisconnectAsync(_connectionNumber);
     }
 }

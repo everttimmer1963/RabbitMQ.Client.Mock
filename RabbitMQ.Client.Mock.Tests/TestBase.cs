@@ -24,10 +24,6 @@ public class TestBase
     {
         // first check requirements
         ArgumentNullException.ThrowIfNull(channel);
-        if (string.IsNullOrEmpty(queue) && !IsClassicQueue(arguments))
-        {
-            throw new ArgumentException("Queue name cannot be null or empty for non-classic queues.", nameof(queue));
-        }
 
         // declare the queue
         var result = await channel.QueueDeclareAsync(queue, durable, exclusive, autoDelete, arguments, passive, nowait, cancellationToken);
@@ -40,23 +36,6 @@ public class TestBase
 
         return result;
     }
-
-    private bool IsClassicQueue(IDictionary<string, object?>? arguments)
-    {
-        if (arguments is null || !arguments.ContainsKey("x-queue-type"))
-        {
-            return true;
-        }
-
-        var type = (string?)arguments["x-queue-type"];
-        if (type is null)
-        {
-            return true;
-        }
-
-        return string.Equals(type.ToLowerInvariant(), "classic", StringComparison.OrdinalIgnoreCase);
-    }
-
 
     protected void ConfigureFactory(IConnectionFactory factory)
     {

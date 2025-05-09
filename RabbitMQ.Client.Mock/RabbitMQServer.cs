@@ -1,4 +1,6 @@
-﻿using RabbitMQ.Client.Mock.Domain;
+﻿using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
+using RabbitMQ.Client.Mock.Domain;
 using System.Collections.Concurrent;
 
 namespace RabbitMQ.Client.Mock;
@@ -120,8 +122,9 @@ internal class RabbitMQServer
             // check if this ia a classic queue. if not, throw an exception.
             var isClassicQueue = await ConfirmQueueType("classic", arguments);
             if (!isClassicQueue)
-            { 
-                throw new ArgumentException("Queue name cannot be null or empty for non-classic queues.", nameof(queue));
+            {
+                var reason = new ShutdownEventArgs(ShutdownInitiator.Peer, 406, "Queue name cannot be null or empty for non-classic queues.");
+                throw new OperationInterruptedException(reason);
             }
 
             // assign a server generated name to the queue.
