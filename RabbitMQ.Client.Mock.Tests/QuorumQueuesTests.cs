@@ -1,0 +1,27 @@
+﻿using RabbitMQ.Client.Exceptions;
+
+namespace RabbitMQ.Client.Mock.Tests;
+
+public class QuorumQueuesTests : TestBase
+{
+    [Fact]
+    public async Task When_Declaring_QuorumQueue_Without_QueueName_Then_Exception_Is_Thrown()
+    {
+        // Locals
+        var queueName = string.Empty;
+        var arguments = new Dictionary<string, object?>() { { "x-queue-type", "quorum" } };
+
+        // Arrange
+        var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
+        var channel = await connection.CreateChannelAsync();
+
+        // Act
+        var act = async () =>
+        {
+            var result = await QueueDeclareAndBindAsync(channel, queueName, durable: false, exclusive: true, autoDelete: true, arguments: arguments);
+        };
+
+        // Assert
+        await Assert.ThrowsAsync<OperationInterruptedException>(act);
+    }
+}
