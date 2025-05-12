@@ -4,8 +4,8 @@ namespace RabbitMQ.Client.Mock.Domain;
 
 internal class FanoutExchange : Exchange
 {
-    public FanoutExchange(string name)
-        : base(name, ExchangeType.Fanout)
+    public FanoutExchange(string name, int connectionNumber)
+        : base(name, ExchangeType.Fanout, connectionNumber)
     {        
     }
 

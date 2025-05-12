@@ -3,7 +3,7 @@
 public static class RabbitMQMocker
 {
     private static FakeConnectionFactory? _connectionFactory;
-    private static RabbitMQServerMonitor? _serverMonitor;
+
     /// <summary>
     /// Creates the main entry point for the mocking client. From this factory, we can create connections,
     /// and connections can create the channels we work with.
@@ -31,10 +31,4 @@ public static class RabbitMQMocker
         }
         return _connectionFactory;
     }
-
-    /// <summary>
-    /// This does not exist in the original RabbitMQ.Client library. It is a helper to get information
-    /// about what happens in the server.
-    /// </summary>
-    public static RabbitMQServerMonitor ServerMonitor => _serverMonitor ??= new RabbitMQServerMonitor();
 }

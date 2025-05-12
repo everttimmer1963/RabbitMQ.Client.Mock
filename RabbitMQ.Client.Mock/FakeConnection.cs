@@ -17,7 +17,7 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
         _connectionNumber = GetNextConnectionNumber();
     }
 
-    private RabbitMQServer Server => RabbitMQServer.GetInstance();
+    private RabbitMQServer Server => RabbitMQServer.GetInstance(_connectionNumber);
 
     public ushort ChannelMax => _options.ChannelMax;
 
@@ -104,7 +104,6 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
             return;
         }
 
-        _channels.ForEach(async ch => await ch.DisposeAsync());
         _channels.Clear();
         await Server.HandleDisconnectAsync(_connectionNumber);
     }

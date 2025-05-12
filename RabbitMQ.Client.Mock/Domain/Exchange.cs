@@ -2,10 +2,12 @@
 
 namespace RabbitMQ.Client.Mock.Domain;
 
-internal abstract class Exchange(string name, string type)
+internal abstract class Exchange(string name, string type, int connectionNumber)
 {
+    private static object _lock = new();
+
     #region Properties
-    protected RabbitMQServer Server => RabbitMQServer.GetInstance();
+    protected RabbitMQServer Server => RabbitMQServer.GetInstance(connectionNumber);
     public string Name { get; set; } = name;
     public string Type { get; set; } = type;
     public bool IsDurable { get; set; }
@@ -66,12 +68,15 @@ internal abstract class Exchange(string name, string type)
 
     public ValueTask HandleQueueDeleted(string queue)
     {
-        foreach (var binding in QueueBindings)
+        lock (_lock)
         {
-            var boundQueue = binding.Value.BoundQueues.FirstOrDefault(bq => bq.Name == queue);
-            if (boundQueue is not null)
+            foreach (var binding in QueueBindings)
             {
-                binding.Value.BoundQueues.Remove(boundQueue);
+                var boundQueue = binding.Value.BoundQueues.FirstOrDefault(bq => bq.Name == queue);
+                if (boundQueue is not null)
+                {
+                    binding.Value.BoundQueues.Remove(boundQueue);
+                }
             }
         }
         return ValueTask.CompletedTask;

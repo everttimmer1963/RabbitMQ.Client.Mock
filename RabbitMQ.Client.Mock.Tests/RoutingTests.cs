@@ -1,14 +1,15 @@
 ﻿using System.Text;
 
-namespace RabbitMQ.Client.Tests;
+namespace RabbitMQ.Client.Mock.Tests;
+
 public class RoutingTests : TestBase
 {
     [Fact]
     public async Task When_Publishing_To_Exchange_With_Multiple_Queues_Bound_Then_All_Queues_Should_Have_A_Copy()
     {
         // Locals
-        var queueName1 = "Hello1-CQ";
-        var queueName2 = "Hello2-CQ";
+        var queueName1 = "Routing-Hello1-CQ";
+        var queueName2 = "Routing-Hello2-CQ";
         var bindingKey = "messages";
         var exchangeName = "xchg-hello";
 
@@ -19,8 +20,8 @@ public class RoutingTests : TestBase
         // Act
         // create and bind the queues
         await channel.ExchangeDeclareAsync(exchange: exchangeName, "direct", false, true);
-        var result1 = await QueueDeclareAndBindAsync(channel, queueName1, exchangeName, bindingKey, durable: false, exclusive: true, autoDelete: true);
-        var result2 = await QueueDeclareAndBindAsync(channel, queueName2, exchangeName, bindingKey, durable: false, exclusive: true, autoDelete: true);
+        var result1 = await QueueDeclareAndBindAsync(channel, queueName1, exchangeName, bindingKey, durable: false, exclusive: true, autoDelete: false);
+        var result2 = await QueueDeclareAndBindAsync(channel, queueName2, exchangeName, bindingKey, durable: false, exclusive: true, autoDelete: false);
 
         // publish message and allow some time for the message to be delivered to the queues
         await channel.BasicPublishAsync(exchange: exchangeName, routingKey: bindingKey, body: Encoding.UTF8.GetBytes("This is a test message."));
@@ -44,8 +45,8 @@ public class RoutingTests : TestBase
     public async Task When_Publishing_To_Exchange_Then_Message_Should_Be_Published_To_All_Bound_Exchanges_And_Queues()
     {
         // Locals
-        var queueName1 = "Hello1-CQ";
-        var queueName2 = "Hello2-CQ";
+        var queueName1 = "Routing-Hello1-CQ";
+        var queueName2 = "Routing-Hello2-CQ";
         var bindingKey = "messages";
         var exchangeName1 = "xchg-hello-1";
         var exchangeName2 = "xchg-hello-2";
@@ -59,8 +60,8 @@ public class RoutingTests : TestBase
         await channel.ExchangeDeclareAsync(exchange: exchangeName1, "direct", false, true);
         await channel.ExchangeDeclareAsync(exchange: exchangeName2, "direct", false, true);
         await channel.ExchangeBindAsync(source: exchangeName1, destination: exchangeName2, routingKey: bindingKey);
-        var result1 = await QueueDeclareAndBindAsync(channel, queueName1, exchangeName1, bindingKey, durable: false, exclusive: true, autoDelete: true);
-        var result2 = await QueueDeclareAndBindAsync(channel, queueName2, exchangeName2, bindingKey, durable: false, exclusive: true, autoDelete: true);
+        var result1 = await QueueDeclareAndBindAsync(channel, queueName1, exchangeName1, bindingKey, durable: false, exclusive: true, autoDelete: false);
+        var result2 = await QueueDeclareAndBindAsync(channel, queueName2, exchangeName2, bindingKey, durable: false, exclusive: true, autoDelete: false);
 
         // publish message and allow some time for the message to be delivered to the queues
         await channel.BasicPublishAsync(exchange: exchangeName1, routingKey: bindingKey, body: Encoding.UTF8.GetBytes("This is a test message."));

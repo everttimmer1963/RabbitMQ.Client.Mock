@@ -15,6 +15,7 @@ internal class RabbitQueue : IAsyncDisposable
     #endregion
 
     private bool _disposed;
+    private int _connectionNumber;
 
     private readonly ConcurrentDictionary<string, Consumer> _consumers = new();
     private readonly ConcurrentQueue<RabbitMessage> _queue = new();
@@ -23,15 +24,16 @@ internal class RabbitQueue : IAsyncDisposable
     private AutoResetEvent _messageAvailable = new AutoResetEvent(true);
     private CancellationTokenSource _tokenSource;
 
-    public RabbitQueue(string name, bool nameIsServerAssigned)
+    public RabbitQueue(string name, bool nameIsServerAssigned, int connectionNumber)
     {
         Name = name;
+        _connectionNumber = connectionNumber;
         HasServerGeneratedName = nameIsServerAssigned;
         _tokenSource = new CancellationTokenSource();
         Task.Run(() => MessageDeliveryLoopAsync(_tokenSource.Token));
     }
 
-    private RabbitMQServer Server => RabbitMQServer.GetInstance();
+    private RabbitMQServer Server => RabbitMQServer.GetInstance(_connectionNumber);
 
     #region Public Properties
     public string Name { get; set; }

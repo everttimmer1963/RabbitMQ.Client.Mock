@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Mock.Domain;
+using System.Diagnostics;
 
 namespace RabbitMQ.Client.Mock;
 internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
@@ -20,7 +21,7 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
         ConnectionNumber = connectionNumber;
     }
 
-    private RabbitMQServer Server => RabbitMQServer.GetInstance();
+    private RabbitMQServer Server => RabbitMQServer.GetInstance(ConnectionNumber);
 
     public int ConnectionNumber { get; private set; }
 
@@ -209,7 +210,7 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
 
     public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        await Server.ExchangeDeclareAsync(exchange, type, durable, autoDelete, arguments, passive);
+        await Server.ExchangeDeclareAsync(ConnectionNumber, exchange, type, durable, autoDelete, arguments, passive);
     }
 
     public async Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default)

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace RabbitMQ.Client.Tests;
+namespace RabbitMQ.Client.Mock.Tests;
 public class DeadLetteringTests : TestBase
 {
     [Fact]
@@ -21,19 +21,14 @@ public class DeadLetteringTests : TestBase
         var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
         var channel = await connection.CreateChannelAsync();
 
-        // create the dead-letter exchange & bound dead-letter queue
+        // declare exchange, dead-letter queue and regular queue.
         await channel.ExchangeDeclareAsync(exchange, ExchangeType.Direct, durable: true, autoDelete: false);
-        await channel.QueueDeclareAsync(dlqQueueName, durable: true, exclusive: false, autoDelete: true);
-        await channel.QueueBindAsync(dlqQueueName, exchange, routingKey);
-
-        // create main queue with exchange and routingkey specified in the arguments
-        await channel.QueueDeclareAsync(mainQueueName, durable: true, exclusive: false, autoDelete: false, arguments: arguments);
+        await QueueDeclareAndBindAsync(channel, dlqQueueName, exchange: exchange, bindingKey: routingKey, durable: true, exclusive: false, autoDelete: false);
+        await QueueDeclareAndBindAsync(channel, mainQueueName, durable: true, exclusive: false, autoDelete: false, arguments: arguments);
 
         // Act
-        // write the message
+        // publish, read and nack the message
         await channel.BasicPublishAsync(string.Empty, mainQueueName, body: Encoding.UTF8.GetBytes("This is a test message."));
-
-        // read and nack the message
         var item = await channel.BasicGetAsync(mainQueueName, false);
         await channel.BasicNackAsync(item!.DeliveryTag, false, false);
 
