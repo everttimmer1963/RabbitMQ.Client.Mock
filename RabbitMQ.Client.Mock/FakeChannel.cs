@@ -1,6 +1,5 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Mock.Domain;
-using System.Diagnostics;
 
 namespace RabbitMQ.Client.Mock;
 internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
@@ -236,9 +235,9 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
         await sourceInstance.UnbindExchangeAsync(destination, routingKey);
     }
 
-    public ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default)
     {
-        return Server.GetNextPublishSequenceNumber();
+        return (ulong)await Server.GetNextPublishSequenceNumber();
     }
 
     public async Task<uint> MessageCountAsync(string queue, CancellationToken cancellationToken = default)

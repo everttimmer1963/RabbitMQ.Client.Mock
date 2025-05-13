@@ -1,7 +1,5 @@
-﻿    
+﻿
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Net.Http.Headers;
 
 namespace RabbitMQ.Client.Mock.Domain;
 internal class RabbitQueue : IAsyncDisposable
