@@ -243,11 +243,7 @@ internal class RabbitMQServer
         {
             if (Exchanges.ContainsKey(exchange))
             {
-                if (passive)
-                {
-                    return;
-                }
-                throw new ArgumentException($"Exchange {exchange} already exists.");
+                return;
             }
             var newExchange = type switch
             {
