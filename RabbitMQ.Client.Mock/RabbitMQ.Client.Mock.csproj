@@ -15,7 +15,7 @@
     <PackageTags>RabbitMQ;Mock;UnitTests</PackageTags>
     <PackageReleaseNotes>Initial upload</PackageReleaseNotes>
 	<PackageLicenceExpression>GPL-3.0-or-later</PackageLicenceExpression>
-	<PackageLicenseFile>license.txt</PackageLicenseFile>
+	<PackageLicenseFile>licence.txt</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
