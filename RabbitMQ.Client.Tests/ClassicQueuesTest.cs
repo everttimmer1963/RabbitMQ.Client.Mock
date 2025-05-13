@@ -47,7 +47,7 @@ public class ClassicQueuesTests : TestBase
     public async Task When_Declaring_Queue_And_Queueing_A_Message_Then_Queue_ShouldHave_One_Item()
     {
         // Locals
-        var queueName = "Hello-CQ";
+        var queueName = await CreateUniqueQueueName();
 
         // Arrange
         var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");

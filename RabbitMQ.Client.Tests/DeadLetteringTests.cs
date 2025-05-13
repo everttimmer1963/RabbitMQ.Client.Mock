@@ -7,8 +7,8 @@ public class DeadLetteringTests : TestBase
     public async Task When_Rejecting_Consumed_Message_From_Queue_That_Has_A_DeadLetterQueue_Configured_Then_Message_Is_Routed_To_DeadletterQueue()
     {
         // Locals
-        var mainQueueName = "Hello";
-        var dlqQueueName = "Hello-DLQ";
+        var mainQueueName = await CreateUniqueQueueName();
+        var dlqQueueName = $"{mainQueueName}-DLQ";
         var exchange = $"{mainQueueName.ToLowerInvariant()}-xchg";
         var routingKey = $"{mainQueueName.ToLowerInvariant()}-rkey";
         var arguments = new Dictionary<string, object?>()

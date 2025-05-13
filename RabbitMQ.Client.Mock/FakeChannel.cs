@@ -90,8 +90,7 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
 
     public async Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
     {
-        await Server.RegisterConsumerAsync(consumerTag, queue, autoAck, arguments, consumer);
-        return consumerTag;
+        return await Server.RegisterConsumerAsync(consumerTag, queue, autoAck, arguments, consumer);
     }
 
     public async Task<BasicGetResult?> BasicGetAsync(string queue, bool autoAck, CancellationToken cancellationToken = default)

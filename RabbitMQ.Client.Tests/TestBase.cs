@@ -1,4 +1,6 @@
-﻿namespace RabbitMQ.Client.Tests;
+﻿using System.Diagnostics;
+
+namespace RabbitMQ.Client.Tests;
 public class TestBase
 { 
     protected readonly IConnectionFactory factory;
@@ -40,5 +42,20 @@ public class TestBase
     protected void ConfigureFactory(IConnectionFactory factory)
     {
         // Modify the factory configuration as needed for your tests
+    }
+
+    protected async ValueTask WaitUntilAsync(Func<bool> condition, int timeout = 10000, int interval = 100)
+    {
+        var sw = Stopwatch.StartNew();
+        while (!condition() && sw.ElapsedMilliseconds < timeout)
+        {
+            await Task.Delay(interval);
+        }
+    }
+
+    protected ValueTask<string> CreateUniqueQueueName()
+    {
+        var queueName = $"RQ-UnitTest-{Guid.NewGuid().ToString("D")}";
+        return ValueTask.FromResult(queueName);
     }
 }

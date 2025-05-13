@@ -7,8 +7,8 @@ public class RoutingTests : TestBase
     public async Task When_Publishing_To_Exchange_With_Multiple_Queues_Bound_Then_All_Queues_Should_Have_A_Copy()
     {
         // Locals
-        var queueName1 = "Hello1-CQ";
-        var queueName2 = "Hello2-CQ";
+        var queueName1 = await CreateUniqueQueueName();
+        var queueName2 = await CreateUniqueQueueName();
         var bindingKey = "messages";
         var exchangeName = "xchg-hello";
 
@@ -44,8 +44,8 @@ public class RoutingTests : TestBase
     public async Task When_Publishing_To_Exchange_Then_Message_Should_Be_Published_To_All_Bound_Exchanges_And_Queues()
     {
         // Locals
-        var queueName1 = "Hello1-CQ";
-        var queueName2 = "Hello2-CQ";
+        var queueName1 = await CreateUniqueQueueName();
+        var queueName2 = await CreateUniqueQueueName();
         var bindingKey = "messages";
         var exchangeName1 = "xchg-hello-1";
         var exchangeName2 = "xchg-hello-2";

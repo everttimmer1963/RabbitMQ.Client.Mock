@@ -290,7 +290,7 @@ internal class RabbitMQServer
         return ValueTask.FromResult(false);
     }
 
-    internal async ValueTask<bool> RegisterConsumerAsync(string consumerTag, string queue, bool autoAck, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer)
+    internal async ValueTask<string> RegisterConsumerAsync(string consumerTag, string queue, bool autoAck, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer)
     {
         await _operationSemaphore.WaitAsync();
         try
@@ -300,8 +300,13 @@ internal class RabbitMQServer
             {
                 throw new ArgumentException($"Queue {queue} does not exist.");
             }
+            if (consumerTag == string.Empty)
+            {
+                consumerTag = $"consumer-{queue.ToLowerInvariant()}-{Guid.NewGuid().ToString("D")}";
+            }
             Consumers.TryAdd(consumerTag, consumer);
-            return await queueInstance.AddConsumerAsync(consumerTag, autoAck, arguments);
+            await queueInstance.AddConsumerAsync(consumerTag, autoAck, arguments);
+            return consumerTag;
         }
         finally
         {
@@ -374,7 +379,7 @@ internal class RabbitMQServer
         await _operationSemaphore.WaitAsync();
         try
         {
-            var queues = PendingMessageBindings.TryGetValue(deliveryTag, out var result) ? result : null;
+            var queues = PendingMessageBindings.TryGetValue(deliveryTag, out var result) ? result.ToArray() : null;
             if (queues is null)
             {
                 return false;
@@ -404,6 +409,7 @@ internal class RabbitMQServer
 
     internal async ValueTask<bool> RejectMessageAsync(ulong deliveryTag, bool multiple, bool requeue)
     {
+        await _operationSemaphore.WaitAsync();
         try
         {
             var queues = PendingMessageBindings.TryGetValue(deliveryTag, out var result) ? result : null;
@@ -424,7 +430,7 @@ internal class RabbitMQServer
         }
         finally
         {
-            await _operationSemaphore.WaitAsync();
+            _operationSemaphore.Release();
         }
     }
 

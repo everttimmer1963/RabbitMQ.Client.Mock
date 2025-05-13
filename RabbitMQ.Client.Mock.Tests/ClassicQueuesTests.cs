@@ -36,7 +36,7 @@ public class ClassicQueuesTests : TestBase
         var channel = await connection.CreateChannelAsync();
 
         // Act
-        var result = await QueueDeclareAndBindAsync(channel, queueName, durable: false, exclusive: true, autoDelete: false);
+        var result = await QueueDeclareAndBindAsync(channel, queueName, durable: false, exclusive: true, autoDelete: true);
 
         // Assert
         Assert.NotNull(result);
@@ -47,14 +47,14 @@ public class ClassicQueuesTests : TestBase
     public async Task When_Declaring_Queue_And_Queueing_A_Message_Then_Queue_ShouldHave_One_Item()
     {
         // Locals
-        var queueName = "Hello-CQ";
+        var queueName = await CreateUniqueQueueName();
 
         // Arrange
         var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
         var channel = await connection.CreateChannelAsync();
 
         // Act
-        var result = await channel.QueueDeclareAsync(queueName, durable: false, exclusive: true, autoDelete: false);
+        var result = await channel.QueueDeclareAsync(queueName, durable: false, exclusive: true, autoDelete: true);
         await channel.BasicPublishAsync(exchange: string.Empty, routingKey: result.QueueName, body: Encoding.UTF8.GetBytes("This is a test message."));
         var item = await channel.BasicGetAsync(result.QueueName, true);
 

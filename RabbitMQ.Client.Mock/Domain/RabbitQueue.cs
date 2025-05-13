@@ -1,5 +1,6 @@
 ﻿    
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net.Http.Headers;
 
 namespace RabbitMQ.Client.Mock.Domain;
@@ -241,29 +242,36 @@ internal class RabbitQueue : IAsyncDisposable
 
                 // get the consumer tags that are bound to this queue
                 var consumerTags = _consumers.Keys.ToArray();
-                foreach (var consumerTag in consumerTags)
+
+                // now randomly choose a consumer tag to deliver the message to
+                var consumerTag = await GetConsumerTagAsync(consumerTags);
+
+                // get settings and instance for this consumer tag
+                var consumerSettings = _consumers[consumerTag];
+                var consumerInstance = await Server.GetConsumerAsync(consumerTag);
+
+                await consumerInstance.HandleBasicDeliverAsync(
+                    consumerTag,
+                    message.DeliveryTag,
+                    false,
+                    message.Exchange,
+                    message.RoutingKey,
+                    message.BasicProperties,
+                    message.Body);
+
+                if (!consumerSettings.AutoAcknowledge)
                 {
-                    // get settings and instance for this consumer tag
-                    var consumerSettings = _consumers[consumerTag];
-                    var consumerInstance = await Server.GetConsumerAsync(consumerTag);
-
-                    await consumerInstance.HandleBasicDeliverAsync(
-                        consumerTag,
-                        message.DeliveryTag,
-                        false,
-                        message.Exchange,
-                        message.RoutingKey,
-                        message.BasicProperties,
-                        message.Body);
-
-                    if (!consumerSettings.AutoAcknowledge)
-                    {
-                        await AddPendingMessageAsync(message.DeliveryTag, message);
-                        await Server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
-                    }
+                    await AddPendingMessageAsync(message.DeliveryTag, message);
+                    await Server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
                 }
             }
         }
+    }
+
+    private async ValueTask<string> GetConsumerTagAsync(string[] consumerTags)
+    {
+        int index = Random.Shared.Next(consumerTags.Length);
+        return consumerTags[index];
     }
 
     public async ValueTask DisposeAsync()

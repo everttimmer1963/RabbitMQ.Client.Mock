@@ -28,7 +28,7 @@ public class QuorumQueuesTests : TestBase
     public async Task When_Declaring_QuorumQueue_Without_QueueName_Then_Queue_With_ServerAssigned_QueueName_Is_Created()
     {
         // Locals
-        var queueName = "Hello-QQ";
+        var queueName = await CreateUniqueQueueName();
 
         // Arrange
         var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
@@ -41,5 +41,4 @@ public class QuorumQueuesTests : TestBase
         Assert.NotNull(result);
         Assert.False(string.IsNullOrWhiteSpace(result.QueueName), $"Expected server assigned queue name, but a zero length string is returned.");
     }
-
 }

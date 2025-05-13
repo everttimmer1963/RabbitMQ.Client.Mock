@@ -7,8 +7,8 @@ public class DeadLetteringTests : TestBase
     public async Task When_Rejecting_Consumed_Message_From_Queue_That_Has_A_DeadLetterQueue_Configured_Then_Message_Is_Routed_To_DeadletterQueue()
     {
         // Locals
-        var mainQueueName = "Hello";
-        var dlqQueueName = "Hello-DLQ";
+        var mainQueueName = await CreateUniqueQueueName();
+        var dlqQueueName = $"{mainQueueName}-DLQ";
         var exchange = $"{mainQueueName.ToLowerInvariant()}-xchg";
         var routingKey = $"{mainQueueName.ToLowerInvariant()}-rkey";
         var arguments = new Dictionary<string, object?>()
@@ -21,14 +21,19 @@ public class DeadLetteringTests : TestBase
         var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
         var channel = await connection.CreateChannelAsync();
 
-        // declare exchange, dead-letter queue and regular queue.
+        // create the dead-letter exchange & bound dead-letter queue
         await channel.ExchangeDeclareAsync(exchange, ExchangeType.Direct, durable: true, autoDelete: false);
-        await QueueDeclareAndBindAsync(channel, dlqQueueName, exchange: exchange, bindingKey: routingKey, durable: true, exclusive: false, autoDelete: false);
-        await QueueDeclareAndBindAsync(channel, mainQueueName, durable: true, exclusive: false, autoDelete: false, arguments: arguments);
+        await channel.QueueDeclareAsync(dlqQueueName, durable: true, exclusive: false, autoDelete: true);
+        await channel.QueueBindAsync(dlqQueueName, exchange, routingKey);
+
+        // create main queue with exchange and routingkey specified in the arguments
+        await channel.QueueDeclareAsync(mainQueueName, durable: true, exclusive: false, autoDelete: false, arguments: arguments);
 
         // Act
-        // publish, read and nack the message
+        // write the message
         await channel.BasicPublishAsync(string.Empty, mainQueueName, body: Encoding.UTF8.GetBytes("This is a test message."));
+
+        // read and nack the message
         var item = await channel.BasicGetAsync(mainQueueName, false);
         await channel.BasicNackAsync(item!.DeliveryTag, false, false);
 
