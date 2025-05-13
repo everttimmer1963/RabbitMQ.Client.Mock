@@ -23,3 +23,9 @@ Some of the features include:
 - Correct routing of messages, including usage of exchange-to-exchange bindings.
 - Usage of DeadLetter exchanges and queues.
 
+## Note
+The solutions contains 3 projects:
+
+- RabbitMQ.Client.Mock: The actual mock implementation.
+- RabbitMQ.Client.Mock.Tests: The unit tests for the mock implementation.
+- RabbitMQ.Client.Tests: The same unit tests but pointing to an actual localhost based RabbitMQ service.
