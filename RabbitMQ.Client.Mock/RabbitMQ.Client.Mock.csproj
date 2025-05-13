@@ -14,16 +14,16 @@
     <RepositoryUrl>https://github.com/everttimmer1963/RabbitMQ.Client.Mock</RepositoryUrl>
     <PackageTags>RabbitMQ;Mock;UnitTests</PackageTags>
     <PackageReleaseNotes>Initial upload</PackageReleaseNotes>
-	<PackageLicenceExpression>GPL-3.0-or-later</PackageLicenceExpression>
-	<PackageLicenseFile>licence.txt</PackageLicenseFile>
-	<Version>1.0.2</Version>
+    <PackageLicenceExpression>GPL-3.0-or-later</PackageLicenceExpression>
+    <PackageLicenseFile>licence.txt</PackageLicenseFile>
+    <Version>1.0.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
-	<None Include="..\licence.txt">
-	  <Pack>True</Pack>
-	  <PackagePath>\</PackagePath>
-	</None>
+    <None Include="..\licence.txt">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
     <None Include="..\Rabbit-128.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
