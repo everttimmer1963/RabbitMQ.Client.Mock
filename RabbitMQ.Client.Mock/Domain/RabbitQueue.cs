@@ -166,8 +166,7 @@ internal class RabbitQueue : IAsyncDisposable
         {
             var requeued = await RequeueMessagesAsync(messages);
         }
-
-        if (HasDeadLetterQueue)
+        else if (HasDeadLetterQueue)
         {
             messages.ForEach(async message => await Server.SendToDeadLetterQueueIfExists(this, message));
         }
@@ -250,6 +249,13 @@ internal class RabbitQueue : IAsyncDisposable
                 var consumerSettings = _consumers[consumerTag];
                 var consumerInstance = await Server.GetConsumerAsync(consumerTag);
 
+                // if the consumer has to confirm or reject the message, add it to the pending messages
+                if (!consumerSettings.AutoAcknowledge)
+                {
+                    await AddPendingMessageAsync(message.DeliveryTag, message);
+                    await Server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
+                }
+
                 await consumerInstance.HandleBasicDeliverAsync(
                     consumerTag,
                     message.DeliveryTag,
@@ -258,12 +264,6 @@ internal class RabbitQueue : IAsyncDisposable
                     message.RoutingKey,
                     message.BasicProperties,
                     message.Body);
-
-                if (!consumerSettings.AutoAcknowledge)
-                {
-                    await AddPendingMessageAsync(message.DeliveryTag, message);
-                    await Server.AddPendingMessageBindingAsync(message.DeliveryTag, Name);
-                }
             }
         }
     }
