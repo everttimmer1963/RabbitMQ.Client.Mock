@@ -1,0 +1,70 @@
+﻿using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Mock.Server.Bindings;
+using RabbitMQ.Client.Mock.Server.Exchanges;
+using RabbitMQ.Client.Mock.Server.Operations;
+using RabbitMQ.Client.Mock.Server.Queues;
+
+namespace RabbitMQ.Client.Mock.Server;
+
+internal interface IRabbitServer
+{
+    #region Properties
+    IDictionary<string, RabbitExchange> Exchanges { get; }
+    IDictionary<string, RabbitQueue> Queues { get; }
+    IDictionary<string, ExchangeBinding> ExchangeBindings { get; }
+    IDictionary<string, QueueBinding> QueueBindings { get; }
+    OperationsProcessor Processor { get; }
+    #endregion
+
+    #region Channel Interface
+    ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default(CancellationToken));
+
+    ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default(CancellationToken));
+
+    ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task BasicCancelAsync(string consumerTag, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task<BasicGetResult?> BasicGetAsync(string queue, bool autoAck, CancellationToken cancellationToken = default(CancellationToken));
+
+    ValueTask BasicPublishAsync<TProperties>(string exchange, string routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default(CancellationToken)) where TProperties : IReadOnlyBasicProperties, IAmqpHeader;
+
+    ValueTask BasicPublishAsync<TProperties>(CachedString exchange, CachedString routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default(CancellationToken)) where TProperties : IReadOnlyBasicProperties, IAmqpHeader;
+
+    Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken = default(CancellationToken));
+
+    ValueTask BasicRejectAsync(ulong deliveryTag, bool requeue, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task CloseAsync(ushort replyCode, string replyText, bool abort, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task CloseAsync(ShutdownEventArgs reason, bool abort, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task ExchangeDeleteAsync(string exchange, bool ifUnused = false, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task<QueueDeclareOk> QueueDeclarePassiveAsync(string queue, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task<uint> QueueDeleteAsync(string queue, bool ifUnused, bool ifEmpty, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task<uint> QueuePurgeAsync(string queue, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task<uint> MessageCountAsync(string queue, CancellationToken cancellationToken = default(CancellationToken));
+
+    Task<uint> ConsumerCountAsync(string queue, CancellationToken cancellationToken = default(CancellationToken));
+    #endregion
+}
