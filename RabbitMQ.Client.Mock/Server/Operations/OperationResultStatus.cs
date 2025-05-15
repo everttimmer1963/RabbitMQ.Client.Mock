@@ -4,4 +4,5 @@ internal enum OperationResultStatus
 {
     Success,
     Failure,
+    Timeout
 }

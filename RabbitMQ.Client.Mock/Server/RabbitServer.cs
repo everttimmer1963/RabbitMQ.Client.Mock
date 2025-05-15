@@ -1,4 +1,5 @@
 ﻿using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Client.Mock.Server.Bindings;
 using RabbitMQ.Client.Mock.Server.Exchanges;
 using RabbitMQ.Client.Mock.Server.Operations;
@@ -20,6 +21,7 @@ internal class RabbitServer : IRabbitServer
     public IDictionary<string, RabbitQueue> Queues { get; } = new ConcurrentDictionary<string, RabbitQueue>();
     public IDictionary<string, ExchangeBinding> ExchangeBindings { get; } = new ConcurrentDictionary<string, ExchangeBinding>();
     public IDictionary<string, QueueBinding> QueueBindings { get; } = new ConcurrentDictionary<string, QueueBinding>();
+    public IDictionary<string, ConsumerBinding> ConsumerBindings { get; } = new ConcurrentDictionary<string, ConsumerBinding>();
 
     public OperationsProcessor Processor { get; private set; }
     #endregion
@@ -98,9 +100,23 @@ internal class RabbitServer : IRabbitServer
         await exchange.ExchangeBindAsync(destination, routingKey, arguments, noWait, cancellationToken);
     }
 
-    public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var operation = new ExchangeDeclareOperation(this, exchange, type, durable, autoDelete, arguments, passive);
+
+        // fire-and-forget ?
+        if (noWait)
+        {
+            await Processor.EnqueueOperationAsync(operation, async (result) =>
+            {
+                await Task.Run(() => Console.WriteLine($"Operation: {GetType().Name} - {result.Message}"));
+            });
+            Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
+            return;
+        }
+
+        // or wait until the operation is done.
+        await Processor.EnqueueOperationAsyncWithWait(operation, true, cancellationToken);
     }
 
     public Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default)
@@ -149,14 +165,45 @@ internal class RabbitServer : IRabbitServer
         await exchangeInstance.QueueBindAsync(queue, routingKey, arguments, noWait, cancellationToken);
     }
 
-    public Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var operation = new QueueDeclareOperation(this, queue, durable, exclusive, autoDelete, arguments, passive);
+
+        // fire-and-forget ?
+        if (noWait)
+        {
+            await Processor.EnqueueOperationAsync(operation, async (result) =>
+            {
+                await Task.Run(() => Console.WriteLine($"Operation: {GetType().Name} - {result.Message}"));
+            });
+            Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
+            return new QueueDeclareOk(queue, 0, 0);
+        }
+
+        // or wait until the operation is done.
+        var result = await Processor.EnqueueOperationAsyncWithWait(operation, false, cancellationToken);
+        if (result.IsFailure)
+        {
+            throw new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, result.Message!));
+        }
+        if (result.IsTimeout)
+        {
+            throw new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, result.Message!));
+        }
+
+        return new QueueDeclareOk(queue, 0, 0);
     }
 
     public Task<QueueDeclareOk> QueueDeclarePassiveAsync(string queue, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        // we only need to check if the queue exists
+        var queueInstance = Queues.TryGetValue(queue, out var q) ? q : null;
+        if (queueInstance is null)
+        {
+            throw new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Queue '{queue}' not found."));
+        }
+
+        return Task.FromResult(new QueueDeclareOk(queue, queueInstance.MessageCount, queueInstance.ConsumerCount));
     }
 
     public Task<uint> QueueDeleteAsync(string queue, bool ifUnused, bool ifEmpty, bool noWait = false, CancellationToken cancellationToken = default)

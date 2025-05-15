@@ -13,10 +13,12 @@ internal interface IRabbitServer
     IDictionary<string, RabbitQueue> Queues { get; }
     IDictionary<string, ExchangeBinding> ExchangeBindings { get; }
     IDictionary<string, QueueBinding> QueueBindings { get; }
+    IDictionary<string, ConsumerBinding> ConsumerBindings { get; }
+
     OperationsProcessor Processor { get; }
     #endregion
 
-    #region Channel Interface
+    #region Server Interface
     ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default(CancellationToken));
 
     ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default(CancellationToken));

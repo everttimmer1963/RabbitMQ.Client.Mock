@@ -13,6 +13,15 @@ internal class OperationResult
         };
     }
 
+    public static OperationResult TimedOut(string? message = null)
+    {
+        return new OperationResult
+        {
+            Status = OperationResultStatus.Timeout,
+            Message = message
+        };
+    }
+
     public static OperationResult Failure(string message)
     {
         return new OperationResult
@@ -41,6 +50,12 @@ internal class OperationResult
             Exception = exception
         };
     }
+
+    public bool IsSuccess => Status == OperationResultStatus.Success;
+
+    public bool IsFailure => Status == OperationResultStatus.Failure;
+
+    public bool IsTimeout => Status == OperationResultStatus.Timeout;
 
     public OperationResultStatus Status { get; private set; }
 

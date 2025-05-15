@@ -27,14 +27,27 @@ internal class ExchangeDeclareOperation(IRabbitServer server, string exchange, s
                 return ValueTask.FromResult(OperationResult.Failure($"Exchange '{exchange}' not found."));
             }
 
+            // create a new exchange
             exchangeInstance = type switch
             {
                 "direct" => new DirectExchange(Server, exchange),
-                "fanout" => new FanoutExchange(exchange, durable, autoDelete, arguments),
-                "topic" => new TopicExchange(exchange, durable, autoDelete, arguments),
-                "headers" => new HeadersExchange(exchange, durable, autoDelete, arguments),
+                "fanout" => new FanoutExchange(Server, exchange),
+                "topic" => new TopicExchange(Server, exchange),
+                "headers" => new HeadersExchange(Server, exchange),
                 _ => throw new ArgumentException($"Exchange type '{type}' is not supported.")
             };
+            exchangeInstance.IsDurable = durable;
+            exchangeInstance.AutoDelete = autoDelete;
+            exchangeInstance.Arguments = arguments;
+
+            // add the exchange to the server. if, by a different thread, the exchange was already added, tryadd will return false.
+            if (!Server.Exchanges.TryAdd(exchange, exchangeInstance))
+            {
+                return ValueTask.FromResult(OperationResult.Success($"Exchange '{exchange}' already exists."));
+            }
+
+            return ValueTask.FromResult(OperationResult.Success($"Exchange '{exchange}' created successfully."));
+
         }
         catch (Exception ex)
         {

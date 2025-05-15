@@ -1,18 +1,24 @@
 ﻿using RabbitMQ.Client.Mock.Server.Data;
-using System.Collections.Concurrent;
 
 namespace RabbitMQ.Client.Mock.Server.Queues;
-internal class RabbitQueue
+internal class RabbitQueue(IRabbitServer server, string name)
 {
-    private ConcurrentLinkedList<RabbitMessage> _queue = new();
+    private readonly ConcurrentLinkedList<RabbitMessage> _queue = new();
 
-    public required string Name { get; internal set; }
+    private IRabbitServer Server => server;
+
+    public string Name { get; } = name;
 
     public bool IsDurable { get; set; }
 
     public bool IsExclusive { get; set; }
 
     public bool AutoDelete { get; set; }
+    public IDictionary<string, object?>? Arguments { get; internal set; }
+
+    public uint MessageCount => Convert.ToUInt32(_queue.Count);
+
+    public uint ConsumerCount => Convert.ToUInt32(Server.ConsumerBindings.Where(cb => cb.Value.Queue.Name.Equals(Name)).Count());
 
     public ValueTask PublishMessageAsync(RabbitMessage message)
     {

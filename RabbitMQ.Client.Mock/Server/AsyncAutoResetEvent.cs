@@ -4,10 +4,14 @@ internal sealed class AsyncAutoResetEvent : IDisposable
 {
     private readonly AutoResetEvent _event;
     private volatile bool _disposed;
+    private readonly TimeSpan _timeOut;
 
-    public AsyncAutoResetEvent(bool initialState = false)
+    public AsyncAutoResetEvent(bool initialState = false, TimeSpan? timeOut = null)
     {
         _event = new AutoResetEvent(initialState);
+        _timeOut = (timeOut == null) 
+            ? TimeSpan.FromSeconds(30) 
+            : timeOut.Value;
     }
 
     public void Set()
@@ -36,7 +40,7 @@ internal sealed class AsyncAutoResetEvent : IDisposable
                 _event,
                 (state, timedOut) => ((TaskCompletionSource<bool>)state!).TrySetResult(!timedOut),
                 tcs,
-                Timeout.Infinite,
+                (int)_timeOut.TotalMilliseconds,
                 executeOnlyOnce: true);
 
             if (cancellationToken.CanBeCanceled)

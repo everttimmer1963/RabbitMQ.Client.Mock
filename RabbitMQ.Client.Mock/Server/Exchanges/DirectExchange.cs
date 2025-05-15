@@ -21,7 +21,7 @@ internal class DirectExchange(IRabbitServer server, string name) : RabbitExchang
         }
 
         // or wait until the operation is done.
-        await Server.Processor.EnqueueOperationAsyncWithWait(operation, cancellationToken);
+        await Server.Processor.EnqueueOperationAsyncWithWait(operation, true, cancellationToken);
     }
 
     public override async ValueTask ExchangeUnbindAsync(string exchange, string routingKey, bool noWait = false, CancellationToken cancellationToken = default)
@@ -40,7 +40,7 @@ internal class DirectExchange(IRabbitServer server, string name) : RabbitExchang
         }
 
         // or wait until the operation is done.
-        await Server.Processor.EnqueueOperationAsyncWithWait(operation, cancellationToken);
+        await Server.Processor.EnqueueOperationAsyncWithWait(operation, true, cancellationToken);
     }
     #endregion
 
@@ -61,7 +61,7 @@ internal class DirectExchange(IRabbitServer server, string name) : RabbitExchang
         }
 
         // or wait until the operation is done.
-        await Server.Processor.EnqueueOperationAsyncWithWait(operation, cancellationToken);
+        await Server.Processor.EnqueueOperationAsyncWithWait(operation, true, cancellationToken);
     }
 
     public override async ValueTask QueueUnbindAsync(string queue, string bindingKey, bool noWait = false, CancellationToken cancellationToken = default)
@@ -80,7 +80,7 @@ internal class DirectExchange(IRabbitServer server, string name) : RabbitExchang
         }
 
         // or wait until the operation is done.
-        await Server.Processor.EnqueueOperationAsyncWithWait(operation, cancellationToken);
+        await Server.Processor.EnqueueOperationAsyncWithWait(operation, true, cancellationToken);
     }
     #endregion
 

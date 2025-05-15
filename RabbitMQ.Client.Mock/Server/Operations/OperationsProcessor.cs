@@ -1,9 +1,13 @@
-﻿using System.Collections.Concurrent;
+﻿using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
+using System.Collections.Concurrent;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
 internal class OperationsProcessor : IDisposable
 {
+    private const int DefaultTimeoutInSeconds = 30; // 30 seconds
+
     private bool _isRunning;
     private bool _disposed;
     private Task _loopTask;
@@ -30,14 +34,14 @@ internal class OperationsProcessor : IDisposable
         _loopTask.GetAwaiter().GetResult();
     }
 
-    public async ValueTask<OperationResult> EnqueueOperationAsyncWithWait(Operation operation, CancellationToken cancellationToken)
+    public async ValueTask<OperationResult> EnqueueOperationAsyncWithWait(Operation operation, bool throwOnError = false, CancellationToken cancellationToken)
     {
         // we need an operation to process.
         if (operation == null) throw new ArgumentNullException(nameof(operation));
 
         // prepare a default result (when a time-out occurs, this will be returned.)
-        OperationResult opResult = OperationResult.Failure("An operation timeout occurred.");
-        using AsyncAutoResetEvent operationDone = new AsyncAutoResetEvent(false);
+        OperationResult opResult = null!;
+        using AsyncAutoResetEvent operationDone = new AsyncAutoResetEvent(false, TimeSpan.FromSeconds(DefaultTimeoutInSeconds));
         Operations.Enqueue((operation, async (result) =>
         {
             // ok, the operation is done. release the wait handle.
@@ -46,8 +50,24 @@ internal class OperationsProcessor : IDisposable
             operationDone.Set();
         }));
 
-        // now wait for the operation to complete
-        await operationDone.WaitOneAsync(cancellationToken);
+        // now wait for the operation to complete, be cancelled or time-out.
+        var timedOut = await operationDone.WaitOneAsync(cancellationToken);
+        if (timedOut)
+        {
+            if (throwOnError)
+            {
+                throw new TimeoutException($"Operation: {operation.OperationId.ToString()} - The operation timed-out after {DefaultTimeoutInSeconds} seconds.");
+            }
+            return OperationResult.TimedOut($"Operation: {operation.OperationId.ToString()} - The operation timed-out after {DefaultTimeoutInSeconds} seconds.");
+        }
+
+        if (opResult.IsFailure && throwOnError)
+        {
+            var reason = new ShutdownEventArgs(ShutdownInitiator.Library, 0, 0, $"Operation: {operation.OperationId.ToString()} - {opResult.Message})");
+            throw new OperationInterruptedException(reason);
+        }
+
+        // return the result of the operation.
         return opResult;
     }
 
