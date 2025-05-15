@@ -85,9 +85,17 @@ internal class RabbitServer : IRabbitServer
         throw new NotImplementedException();
     }
 
-    public Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        // get the source exchange
+        var exchange = Exchanges.TryGetValue(source, out var x) ? x : null;
+        if (exchange is null)
+        {
+            throw new ArgumentException($"Exchange '{source}' not found.");
+        }
+
+        // now bind the destination exchange to the source exchange
+        await exchange.ExchangeBindAsync(destination, routingKey, arguments, noWait, cancellationToken);
     }
 
     public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
@@ -105,9 +113,17 @@ internal class RabbitServer : IRabbitServer
         throw new NotImplementedException();
     }
 
-    public Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        // get the source exchange
+        var exchange = Exchanges.TryGetValue(source, out var x) ? x : null;
+        if (exchange is null)
+        {
+            throw new ArgumentException($"Exchange '{source}' not found.");
+        }
+
+        // now unbind the destination exchange from the source exchange
+        await exchange.ExchangeUnbindAsync(destination, routingKey, noWait, cancellationToken);
     }
 
     public ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default)
@@ -120,9 +136,17 @@ internal class RabbitServer : IRabbitServer
         throw new NotImplementedException();
     }
 
-    public Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        // get the source exchange
+        var exchangeInstance = Exchanges.TryGetValue(exchange, out var x) ? x : null;
+        if (exchangeInstance is null)
+        {
+            throw new ArgumentException($"Exchange '{exchange}' not found.");
+        }
+
+        // now bind the queue to the exchange
+        await exchangeInstance.QueueBindAsync(queue, routingKey, arguments, noWait, cancellationToken);
     }
 
     public Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
@@ -140,14 +164,29 @@ internal class RabbitServer : IRabbitServer
         throw new NotImplementedException();
     }
 
-    public Task<uint> QueuePurgeAsync(string queue, CancellationToken cancellationToken = default)
+    public async Task<uint> QueuePurgeAsync(string queue, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        // get the queue instance
+        var queueInstance = Queues.TryGetValue(queue, out var q) ? q : null;
+        if (queueInstance is null)
+        {
+            throw new ArgumentException($"Queue '{queue}' not found.");
+        }
+
+        // now purge the queue
+        return await queueInstance.PurgeAsync();
     }
 
-    public Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
+    public async Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        // get the source exchange
+        var exchangeInstance = Exchanges.TryGetValue(exchange, out var x) ? x : null;
+        if (exchangeInstance is null)
+        {
+            throw new ArgumentException($"Exchange '{exchange}' not found.");
+        }
+        // now unbind the queue from the exchange
+        await exchangeInstance.QueueUnbindAsync(queue, routingKey, false, cancellationToken);
     }
     #endregion
 }

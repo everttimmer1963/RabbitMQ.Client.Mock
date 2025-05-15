@@ -30,6 +30,27 @@ internal class OperationsProcessor : IDisposable
         _loopTask.GetAwaiter().GetResult();
     }
 
+    public async ValueTask<OperationResult> EnqueueOperationAsyncWithWait(Operation operation, CancellationToken cancellationToken)
+    {
+        // we need an operation to process.
+        if (operation == null) throw new ArgumentNullException(nameof(operation));
+
+        // prepare a default result (when a time-out occurs, this will be returned.)
+        OperationResult opResult = OperationResult.Failure("An operation timeout occurred.");
+        using AsyncAutoResetEvent operationDone = new AsyncAutoResetEvent(false);
+        Operations.Enqueue((operation, async (result) =>
+        {
+            // ok, the operation is done. release the wait handle.
+            await Task.Run(() => Console.WriteLine($"Operation: {operation.OperationId.ToString()} - {result.Message}"));
+            opResult = result;
+            operationDone.Set();
+        }));
+
+        // now wait for the operation to complete
+        await operationDone.WaitOneAsync(cancellationToken);
+        return opResult;
+    }
+
     public ValueTask EnqueueOperationAsync(Operation operation, Func<OperationResult, Task>? callback = null)
     {
         if (operation == null) throw new ArgumentNullException(nameof(operation));
