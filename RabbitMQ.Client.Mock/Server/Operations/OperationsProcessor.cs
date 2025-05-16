@@ -34,49 +34,52 @@ internal class OperationsProcessor : IDisposable
         _loopTask.GetAwaiter().GetResult();
     }
 
-    public async ValueTask<OperationResult> EnqueueOperationAsyncWithWait(Operation operation, bool throwOnError = false, CancellationToken cancellationToken)
+    public async ValueTask<OperationResult<TResult>?> EnqueueOperationAsync<TResult>(Operation<TResult> operation, bool noWait = false, bool throwOnTimeout = false, Func<OperationResult, Task>? callback = null, CancellationToken cancellationToken = default) where TResult : class
     {
         // we need an operation to process.
         if (operation == null) throw new ArgumentNullException(nameof(operation));
 
+        // check if we need to await the outcome of the operation.
+        if (noWait)
+        {
+            // nope, just enqueue the operation. the caller will be notified of the result, if a callback is specified.
+            if (operation == null) throw new ArgumentNullException(nameof(operation));
+            Operations.Enqueue((operation, callback));
+            _waitHandle.Set();
+            return null;
+        }
+
         // prepare a default result (when a time-out occurs, this will be returned.)
-        OperationResult opResult = null!;
+        OperationResult<TResult> opResult = null!;
         using AsyncAutoResetEvent operationDone = new AsyncAutoResetEvent(false, TimeSpan.FromSeconds(DefaultTimeoutInSeconds));
         Operations.Enqueue((operation, async (result) =>
         {
             // ok, the operation is done. release the wait handle.
             await Task.Run(() => Console.WriteLine($"Operation: {operation.OperationId.ToString()} - {result.Message}"));
-            opResult = result;
+            opResult = (OperationResult<TResult>)result;
             operationDone.Set();
-        }));
+        }
+        ));
 
         // now wait for the operation to complete, be cancelled or time-out.
         var timedOut = await operationDone.WaitOneAsync(cancellationToken);
         if (timedOut)
         {
-            if (throwOnError)
+            if (throwOnTimeout)
             {
                 throw new TimeoutException($"Operation: {operation.OperationId.ToString()} - The operation timed-out after {DefaultTimeoutInSeconds} seconds.");
             }
-            return OperationResult.TimedOut($"Operation: {operation.OperationId.ToString()} - The operation timed-out after {DefaultTimeoutInSeconds} seconds.");
+            return OperationResult.TimedOut<TResult>($"Operation: {operation.OperationId.ToString()} - The operation timed-out after {DefaultTimeoutInSeconds} seconds.");
         }
 
-        if (opResult.IsFailure && throwOnError)
+        // if an exceltion has been returned with the result, we throw it.
+        if (opResult is { IsFailure: true, Exception: not null })
         {
-            var reason = new ShutdownEventArgs(ShutdownInitiator.Library, 0, 0, $"Operation: {operation.OperationId.ToString()} - {opResult.Message})");
-            throw new OperationInterruptedException(reason);
+            throw opResult.Exception;
         }
 
         // return the result of the operation.
         return opResult;
-    }
-
-    public ValueTask EnqueueOperationAsync(Operation operation, Func<OperationResult, Task>? callback = null)
-    {
-        if (operation == null) throw new ArgumentNullException(nameof(operation));
-        Operations.Enqueue((operation, callback));
-        _waitHandle.Set();
-        return new ValueTask();
     }
 
     private async Task ProcessingLoop(CancellationToken cancellationToken)

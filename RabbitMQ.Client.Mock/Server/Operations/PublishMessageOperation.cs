@@ -3,19 +3,20 @@ using RabbitMQ.Client.Mock.Server.Exchanges;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
-internal class PublishMessageOperation(IRabbitServer server, RabbitExchange exchange, string routingKey, RabbitMessage message) : Operation(server)
+internal class PublishMessageOperation(IRabbitServer server, RabbitExchange exchange, string routingKey, RabbitMessage message) : Operation<object>(server)
 {
     public override bool IsValid => !(Server is null || exchange is null || string.IsNullOrWhiteSpace(routingKey) || message is null);
-    public override ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
+
+    public override ValueTask<OperationResult<object>> ExecuteAsync(CancellationToken cancellationToken)
     {
         try
         {
-            bool published = false;
-
             if(!IsValid)
             {
-                return ValueTask.FromResult(OperationResult.Failure("RoutingKey and Message are required."));
+                return ValueTask.FromResult(OperationResult.Failure<object>(new InvalidOperationException("RoutingKey and Message are required.")));
             }
+
+            bool published = false;
 
             // route the message to any bound exchanges.
             var exchangeBindings = exchange.ExchangeBindings.TryGetValue(routingKey, out var b) ? b : null;
@@ -44,15 +45,15 @@ internal class PublishMessageOperation(IRabbitServer server, RabbitExchange exch
             // return success.
             if(!published)
             {
-                return ValueTask.FromResult(OperationResult.Failure($"{GetType().Name}: No bound exchanges or queues found for message delivery."));
+                return ValueTask.FromResult(OperationResult.Failure<object>($"{GetType().Name}: No bound exchanges or queues found for message delivery."));
             }
 
             // done
-            return ValueTask.FromResult(OperationResult.Success($"{GetType().Name}: The message has succesfully been published."));
+            return ValueTask.FromResult(OperationResult.Success<object>($"{GetType().Name}: The message has succesfully been published."));
         }
         catch (Exception ex)
         {
-            return ValueTask.FromResult(OperationResult.Failure(ex));
+            return ValueTask.FromResult(OperationResult.Failure<object>(ex));
         }
     }
 }

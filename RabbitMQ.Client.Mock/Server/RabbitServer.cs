@@ -89,34 +89,30 @@ internal class RabbitServer : IRabbitServer
 
     public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        // get the source exchange
-        var exchange = Exchanges.TryGetValue(source, out var x) ? x : null;
-        if (exchange is null)
+        var operation = new ExchangeBindOperation(this, source, destination, routingKey, arguments);
+        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken);
+        if (noWait)
         {
-            throw new ArgumentException($"Exchange '{source}' not found.");
+            Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
         }
-
-        // now bind the destination exchange to the source exchange
-        await exchange.ExchangeBindAsync(destination, routingKey, arguments, noWait, cancellationToken);
+        if (outcome is { IsFailure: true, Exception: not null })
+        {
+            throw outcome.Exception;
+        }
     }
 
     public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
         var operation = new ExchangeDeclareOperation(this, exchange, type, durable, autoDelete, arguments, passive);
-
-        // fire-and-forget ?
+        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken);
         if (noWait)
         {
-            await Processor.EnqueueOperationAsync(operation, async (result) =>
-            {
-                await Task.Run(() => Console.WriteLine($"Operation: {GetType().Name} - {result.Message}"));
-            });
             Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
-            return;
         }
-
-        // or wait until the operation is done.
-        await Processor.EnqueueOperationAsyncWithWait(operation, true, cancellationToken);
+        if (outcome is { IsFailure: true, Exception: not null })
+        {
+            throw outcome.Exception;
+        }
     }
 
     public Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default)
@@ -168,30 +164,24 @@ internal class RabbitServer : IRabbitServer
     public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
         var operation = new QueueDeclareOperation(this, queue, durable, exclusive, autoDelete, arguments, passive);
-
-        // fire-and-forget ?
+        var outcome = await Processor.EnqueueOperationAsync<QueueDeclareOk>(operation, noWait, true, cancellationToken: cancellationToken);
         if (noWait)
         {
-            await Processor.EnqueueOperationAsync(operation, async (result) =>
-            {
-                await Task.Run(() => Console.WriteLine($"Operation: {GetType().Name} - {result.Message}"));
-            });
             Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
             return new QueueDeclareOk(queue, 0, 0);
         }
 
-        // or wait until the operation is done.
-        var result = await Processor.EnqueueOperationAsyncWithWait(operation, false, cancellationToken);
-        if (result.IsFailure)
+        if (outcome is { IsFailure: true, Exception: not null })
         {
-            throw new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, result.Message!));
-        }
-        if (result.IsTimeout)
-        {
-            throw new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, result.Message!));
+            throw outcome.Exception;
         }
 
-        return new QueueDeclareOk(queue, 0, 0);
+        if (outcome is not { Result: not null })
+        {
+            throw new InvalidOperationException($"Operation: {operation.OperationId.ToString()} - The operation did not return a result.");
+        }
+
+        return outcome.Result;
     }
 
     public Task<QueueDeclareOk> QueueDeclarePassiveAsync(string queue, CancellationToken cancellationToken = default)

@@ -66,4 +66,92 @@ public class ClassicQueuesTests : TestBase
         await channel.DisposeAsync();
         await connection.DisposeAsync();
     }
+
+    [Fact]
+    public async Task When_Deleting_Queue_When_Contains_Items_And_IfEmpty_Is_True_Then_OperationInterruptedException()
+    { 
+        // locals
+        var queueName = await CreateUniqueQueueName();
+
+        // Arrange
+        var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
+        var channel = await connection.CreateChannelAsync();
+        var result = await channel.QueueDeclareAsync(queueName, durable: false, exclusive: true, autoDelete: true);
+        await channel.BasicPublishAsync(exchange: string.Empty, routingKey: result.QueueName, body: Encoding.UTF8.GetBytes("This is a test message."));
+
+        // Act
+        Func<Task> act = async () => await channel.QueueDeleteAsync(result.QueueName, ifEmpty: true);
+
+        // Assert
+        await Assert.ThrowsAsync<OperationInterruptedException>(act);
+
+        // Cleanup
+        await channel.DisposeAsync();
+        await connection.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task When_Binding_Queue_To_Non_Existing_Exchange_Then_OperationInterruptedException()
+    {
+        // locals
+        var queueName = await CreateUniqueQueueName();
+
+        // Arrange
+        var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
+        var channel = await connection.CreateChannelAsync();
+
+        // Act
+        Func<Task> act = async () => await channel.QueueBindAsync(queueName, "test-exchange", "test-exchange-routing");
+
+        // Assert
+        await Assert.ThrowsAsync<OperationInterruptedException>(act);
+
+        // Cleanup
+        await channel.DisposeAsync();
+        await connection.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task When_Binding_Queue_That_Not_Exists_Then_OperationInterruptedException()
+    {
+        // locals
+        var queueName = await CreateUniqueQueueName();
+
+        // Arrange
+        var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
+        var channel = await connection.CreateChannelAsync();
+        await channel.ExchangeDeleteAsync("test-exchange");
+        await channel.ExchangeDeclareAsync("test-exchange", ExchangeType.Direct, autoDelete: true);
+
+        // Act
+        Func<Task> act = async () => await channel.QueueBindAsync(queueName, "test-exchange", "test-exchange-routing");
+
+        // Assert
+        await Assert.ThrowsAsync<OperationInterruptedException>(act);
+
+        // Cleanup
+        await channel.DisposeAsync();
+        await connection.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task When_Deleting_Queue_That_Not_Exists_Then_OperationInterruptedException()
+    {
+        // locals
+        var queueName = await CreateUniqueQueueName();
+
+        // Arrange
+        var connection = await factory.CreateConnectionAsync("RabbitMQ.Client.Mock");
+        var channel = await connection.CreateChannelAsync();
+
+        // Act
+        Func<Task> act = async () => await channel.QueueDeleteAsync(queueName);
+
+        // Assert
+        await Assert.ThrowsAsync<OperationInterruptedException>(act);
+
+        // Cleanup
+        await channel.DisposeAsync();
+        await connection.DisposeAsync();
+    }
 }

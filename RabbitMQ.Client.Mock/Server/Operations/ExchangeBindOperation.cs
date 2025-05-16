@@ -1,28 +1,37 @@
 ﻿
+using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Client.Mock.Server.Bindings;
 using RabbitMQ.Client.Mock.Server.Exchanges;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
-internal class ExchangeBindOperation(IRabbitServer server, RabbitExchange source, string target, string routingKey, IDictionary<string, object?>? arguments = null) : Operation(server)
+internal class ExchangeBindOperation(IRabbitServer server, string source, string destination, string routingKey, IDictionary<string, object?>? arguments = null) : Operation<object>(server)
 {
-    public override bool IsValid => !(Server is null || source is null || string.IsNullOrEmpty(target) || string.IsNullOrEmpty(routingKey));
+    public override bool IsValid => !(Server is null || string.IsNullOrEmpty(source) || string.IsNullOrEmpty(destination) || string.IsNullOrEmpty(routingKey));
 
-    public override ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
+    public override ValueTask<OperationResult<object>> ExecuteAsync(CancellationToken cancellationToken)
     {
         try
         {
             // check if all information is provided
             if (!IsValid)
             {
-                return ValueTask.FromResult(OperationResult.Failure("Source, Target and ResourceKey are required."));
+                return ValueTask.FromResult(OperationResult.Failure<object>(new InvalidOperationException("Source, Target and ResourceKey are required."));
+            }
+
+            // get the source exchange to bind to
+            var sourceExchange = Server.Exchanges.TryGetValue(source, out var x) ? x : null;
+            if (sourceExchange is null)
+            {
+                return ValueTask.FromResult(OperationResult.Failure<object>(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Exchange '{source}' not found."))));
             }
 
             // get the exchange to bind.
-            var exchange = Server.Exchanges.TryGetValue(target, out var xchg) ? xchg : null;
-            if (exchange is null)
+            var targetExchange = Server.Exchanges.TryGetValue(destination, out var xchg) ? xchg : null;
+            if (targetExchange is null)
             {
-                return ValueTask.FromResult(OperationResult.Failure($"Exchange '{target}' not found."));
+                return ValueTask.FromResult(OperationResult.Failure<object>(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Exchange '{destination}' not found."))));
             }
 
             // check if we alread have binding
@@ -30,26 +39,26 @@ internal class ExchangeBindOperation(IRabbitServer server, RabbitExchange source
             if ( binding is null)
             {
                 // create a new binding and add the target exchange
-                binding = new ExchangeBinding { Exchange = source, Arguments = arguments };
-                binding.BoundExchanges.Add(target, exchange);
+                binding = new ExchangeBinding { Exchange = targetExchange, Arguments = arguments };
+                binding.BoundExchanges.Add(destination, targetExchange);
 
                 // finally, add the new binding and return success.
                 Server.ExchangeBindings.TryAdd(routingKey, binding);
 
-                return ValueTask.FromResult(OperationResult.Success($"Exchange '{exchange.Name}' bound to exchange '{target}' with key '{routingKey}'."));
+                return ValueTask.FromResult(OperationResult.Success<object>($"Exchange '{destination}' bound to exchange '{source}' with key '{routingKey}'."));
             }
 
             // the binding exists. check if the target exchange is already bound. If so, return success.
-            if (!binding.BoundExchanges.TryAdd(target, exchange))
+            if (!binding.BoundExchanges.TryAdd(destination, targetExchange))
             {
-                return ValueTask.FromResult(OperationResult.Success($"Exchange '{source.Name}' already bound to exchange '{target}' with key '{routingKey}'."));
+                return ValueTask.FromResult(OperationResult.Success<object>($"Exchange '{destination}' already bound to exchange '{source}' with key '{routingKey}'."));
             }
 
-            return ValueTask.FromResult(OperationResult.Success($"Exchange '{source.Name}' bound to exchange '{target}' with key '{routingKey}'."));
+            return ValueTask.FromResult(OperationResult.Success<object>($"Exchange '{destination}' bound to exchange '{source}' with key '{routingKey}'."));
         }
         catch (Exception ex)
         {
-            return ValueTask.FromResult(OperationResult.Failure(ex));
+            return ValueTask.FromResult(OperationResult.Failure<object>(ex));
         }
     }
 }
