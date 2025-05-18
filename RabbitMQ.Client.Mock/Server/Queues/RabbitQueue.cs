@@ -149,4 +149,9 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
 
         _waitHandle.Dispose();
     }
+
+    internal bool TryGetDeadLetterQueueInfoAsync(out string? exchange, out string? routingKey)
+    {
+        throw new NotImplementedException();
+    }
 }

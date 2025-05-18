@@ -15,7 +15,7 @@ internal interface IRabbitServer
     IDictionary<string, ExchangeBinding> ExchangeBindings { get; }
     IDictionary<string, QueueBinding> QueueBindings { get; }
     IDictionary<string, ConsumerBinding> ConsumerBindings { get; }
-    IDictionary<(int,ulong),PendingConfirm> PendingConfirms { get; }
+    IDictionary<(int Channel, ulong DeliveryTag),PendingConfirm> PendingConfirms { get; }
     IDictionary<int, IChannel> Channels { get; }
     OperationsProcessor Processor { get; }
     #endregion

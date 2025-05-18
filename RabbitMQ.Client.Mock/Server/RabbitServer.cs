@@ -23,7 +23,7 @@ internal class RabbitServer : IRabbitServer
     public IDictionary<string, ExchangeBinding> ExchangeBindings { get; } = new ConcurrentDictionary<string, ExchangeBinding>();
     public IDictionary<string, QueueBinding> QueueBindings { get; } = new ConcurrentDictionary<string, QueueBinding>();
     public IDictionary<string, ConsumerBinding> ConsumerBindings { get; } = new ConcurrentDictionary<string, ConsumerBinding>();
-    public IDictionary<(int,ulong),PendingConfirm> PendingConfirms { get; } = new ConcurrentDictionary<(int, ulong),PendingConfirm>();
+    public IDictionary<(int Channel, ulong DeliveryTag),PendingConfirm> PendingConfirms { get; } = new ConcurrentDictionary<(int Channel, ulong DeliveryTag),PendingConfirm>();
     public IDictionary<int, IChannel> Channels { get; } = new ConcurrentDictionary<int, IChannel>();
 
     public OperationsProcessor Processor { get; private set; }
