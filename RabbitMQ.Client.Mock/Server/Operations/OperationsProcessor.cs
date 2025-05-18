@@ -1,6 +1,4 @@
-﻿using RabbitMQ.Client.Events;
-using RabbitMQ.Client.Exceptions;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
@@ -34,7 +32,7 @@ internal class OperationsProcessor : IDisposable
         _loopTask.GetAwaiter().GetResult();
     }
 
-    public async ValueTask<OperationResult<TResult>?> EnqueueOperationAsync<TResult>(Operation<TResult> operation, bool noWait = false, bool throwOnTimeout = false, Func<OperationResult, Task>? callback = null, CancellationToken cancellationToken = default) where TResult : class
+    public async ValueTask<OperationResult?> EnqueueOperationAsync(Operation operation, bool noWait = false, bool throwOnTimeout = false, Func<OperationResult, Task>? callback = null, CancellationToken cancellationToken = default)
     {
         // we need an operation to process.
         if (operation == null) throw new ArgumentNullException(nameof(operation));
@@ -50,26 +48,25 @@ internal class OperationsProcessor : IDisposable
         }
 
         // prepare a default result (when a time-out occurs, this will be returned.)
-        OperationResult<TResult> opResult = null!;
+        OperationResult opResult = null!;
         using AsyncAutoResetEvent operationDone = new AsyncAutoResetEvent(false, TimeSpan.FromSeconds(DefaultTimeoutInSeconds));
         Operations.Enqueue((operation, async (result) =>
         {
             // ok, the operation is done. release the wait handle.
-            await Task.Run(() => Console.WriteLine($"Operation: {operation.OperationId.ToString()} - {result.Message}"));
-            opResult = (OperationResult<TResult>)result;
+            await Task.Run(() => Console.WriteLine($"Operation: {operation.OperationId.ToString()} - {result.Message}")).ConfigureAwait(false);
+            opResult = result;
             operationDone.Set();
-        }
-        ));
+        }));
 
         // now wait for the operation to complete, be cancelled or time-out.
-        var timedOut = await operationDone.WaitOneAsync(cancellationToken);
+        var timedOut = await operationDone.WaitOneAsync(cancellationToken).ConfigureAwait(false);
         if (timedOut)
         {
             if (throwOnTimeout)
             {
                 throw new TimeoutException($"Operation: {operation.OperationId.ToString()} - The operation timed-out after {DefaultTimeoutInSeconds} seconds.");
             }
-            return OperationResult.TimedOut<TResult>($"Operation: {operation.OperationId.ToString()} - The operation timed-out after {DefaultTimeoutInSeconds} seconds.");
+            return OperationResult.TimedOut($"Operation: {operation.OperationId.ToString()} - The operation timed-out after {DefaultTimeoutInSeconds} seconds.");
         }
 
         // if an exceltion has been returned with the result, we throw it.

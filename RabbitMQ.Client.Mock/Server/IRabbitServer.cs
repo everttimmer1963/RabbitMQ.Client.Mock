@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Mock.Server.Bindings;
+using RabbitMQ.Client.Mock.Server.Data;
 using RabbitMQ.Client.Mock.Server.Exchanges;
 using RabbitMQ.Client.Mock.Server.Operations;
 using RabbitMQ.Client.Mock.Server.Queues;
@@ -14,22 +15,23 @@ internal interface IRabbitServer
     IDictionary<string, ExchangeBinding> ExchangeBindings { get; }
     IDictionary<string, QueueBinding> QueueBindings { get; }
     IDictionary<string, ConsumerBinding> ConsumerBindings { get; }
-
+    IDictionary<(int,ulong),PendingConfirm> PendingConfirms { get; }
+    IDictionary<int, IChannel> Channels { get; }
     OperationsProcessor Processor { get; }
     #endregion
 
     #region Server Interface
     ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default(CancellationToken));
 
-    ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default(CancellationToken));
+    ValueTask BasicAckAsync(int channelNumber, ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default(CancellationToken));
 
-    ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default(CancellationToken));
+    ValueTask BasicNackAsync(int channelNumber, ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default(CancellationToken));
 
     Task BasicCancelAsync(string consumerTag, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
 
     Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default(CancellationToken));
 
-    Task<BasicGetResult?> BasicGetAsync(string queue, bool autoAck, CancellationToken cancellationToken = default(CancellationToken));
+    Task<BasicGetResult?> BasicGetAsync(int channelNumber, string queue, bool autoAck, CancellationToken cancellationToken = default(CancellationToken));
 
     ValueTask BasicPublishAsync<TProperties>(string exchange, string routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default(CancellationToken)) where TProperties : IReadOnlyBasicProperties, IAmqpHeader;
 
@@ -68,5 +70,11 @@ internal interface IRabbitServer
     Task<uint> MessageCountAsync(string queue, CancellationToken cancellationToken = default(CancellationToken));
 
     Task<uint> ConsumerCountAsync(string queue, CancellationToken cancellationToken = default(CancellationToken));
+
+    void RegisterChannel(int channelNumber, IChannel channel);
+
+    void UnregisterChannel(int channelNumber);
+
+    ValueTask<string> GenerateUniqueConsumerTag(string queueName);
     #endregion
 }

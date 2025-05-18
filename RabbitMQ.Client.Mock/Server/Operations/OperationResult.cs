@@ -1,16 +1,14 @@
 ﻿namespace RabbitMQ.Client.Mock.Server.Operations;
 
-internal class OperationResult
+internal class OperationResult(object? result = null)
 {
-    public static object NullValue = new object();
-
     public bool IsSuccess => Status == OperationResultStatus.Success;
+
+    public bool IsWarning => Status == OperationResultStatus.Warning;
 
     public bool IsFailure => Status == OperationResultStatus.Failure;
 
     public bool IsTimeout => Status == OperationResultStatus.Timeout;
-
-    public bool IsNullValue => (this == NullValue);
 
     public OperationResultStatus Status { get; protected set; }
 
@@ -18,60 +16,49 @@ internal class OperationResult
 
     public Exception? Exception { get; protected set; }
 
-    public static OperationResult<TResult> Success<TResult>(string? message = null, TResult? result = null) where TResult : class
+    public TResult? GetResult<TResult>() where TResult : class
     {
-        return new OperationResult<TResult>(result)
+        return result switch
+        {
+            null => default,
+            TResult typedResult => typedResult,
+            _ => throw new InvalidOperationException($"Result is not of type {typeof(TResult).Name}.")
+        };
+    }
+
+    public static OperationResult Success(string? message = null, object? result = null)
+    {
+        return new OperationResult(result)
         {
             Status = OperationResultStatus.Success,
             Message = message
         };
     }
 
-    public static OperationResult<TResult> TimedOut<TResult>(string? message = null) where TResult : class
+    public static OperationResult Warning(string? message = null, object? result = null)
     {
-        return new OperationResult<TResult>
+        return new OperationResult(result)
+        {
+            Status = OperationResultStatus.Warning,
+            Message = message
+        };
+    }
+
+    public static OperationResult TimedOut(string? message = null)
+    {
+        return new OperationResult
         {
             Status = OperationResultStatus.Timeout,
             Message = message
         };
     }
-
-    public static OperationResult<TResult> Failure<TResult>(string message) where TResult : class
+    public static OperationResult Failure(Exception exception)
     {
-        return new OperationResult<TResult>
-        {
-            Status = OperationResultStatus.Failure,
-            Message = message
-        };
-    }
-
-    public static OperationResult<TResult> Failure<TResult>(Exception exception) where TResult : class
-    {
-        return new OperationResult<TResult>
+        return new OperationResult
         {
             Status = OperationResultStatus.Failure,
             Message = exception.Message,
             Exception = exception
         };
     }
-
-    public static OperationResult<TResult> Failure<TResult>(string message, Exception exception) where TResult : class
-    {
-        return new OperationResult<TResult>
-        {
-            Status = OperationResultStatus.Failure,
-            Message = message,
-            Exception = exception
-        };
-    }
-}
-
-internal class OperationResult<TResult> : OperationResult where TResult : class
-{
-    internal OperationResult(TResult? result = null)
-    {
-        Result = result;
-    }
-
-    public TResult? Result { get; internal set; }
 }

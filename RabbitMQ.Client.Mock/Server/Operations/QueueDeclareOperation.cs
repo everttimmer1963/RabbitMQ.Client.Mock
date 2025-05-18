@@ -2,17 +2,17 @@
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
-internal class QueueDeclareOperation(IRabbitServer server, string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments, bool passive = false) : Operation<QueueDeclareOk>(server)
+internal class QueueDeclareOperation(IRabbitServer server, string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments, bool passive = false) : Operation(server)
 {
     public override bool IsValid => !(Server is null || string.IsNullOrWhiteSpace(queue));
 
-    public override ValueTask<OperationResult<QueueDeclareOk>> ExecuteAsync(CancellationToken cancellationToken)
+    public override ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
     {
         try
         {
             if (!IsValid)
             {
-                return ValueTask.FromResult(OperationResult.Failure<QueueDeclareOk>("Queue name is required."));
+                return ValueTask.FromResult(OperationResult.Warning("Queue name is required."));
             }
 
             // check if the queue already exists.
@@ -21,13 +21,13 @@ internal class QueueDeclareOperation(IRabbitServer server, string queue, bool du
             {
                 var messageCount = queueInstance.MessageCount;
                 var consumerCount = queueInstance.ConsumerCount;
-                return ValueTask.FromResult(OperationResult.Success<QueueDeclareOk>($"Queue '{queueInstance.Name}' already exists.", new QueueDeclareOk(queue, messageCount, consumerCount)));
+                return ValueTask.FromResult(OperationResult.Success($"Queue '{queueInstance.Name}' already exists.", new QueueDeclareOk(queue, messageCount, consumerCount)));
             }
 
             // if passive is true, we should not create the queue, but return an error instead.
             if (passive)
             {
-                return ValueTask.FromResult(OperationResult.Failure<QueueDeclareOk>($"Queue '{queue}' not found."));
+                return ValueTask.FromResult(OperationResult.Warning($"Queue '{queue}' not found."));
             }
 
             // create a new queue
@@ -46,7 +46,7 @@ internal class QueueDeclareOperation(IRabbitServer server, string queue, bool du
         }
         catch (Exception ex)
         {
-            return ValueTask.FromResult(OperationResult.Failure<QueueDeclareOk>(ex));
+            return ValueTask.FromResult(OperationResult.Failure(ex));
         }
     }
 }

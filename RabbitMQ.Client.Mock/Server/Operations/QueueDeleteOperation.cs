@@ -3,17 +3,17 @@ using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
-internal class QueueDeleteOperation(IRabbitServer server, string queue, bool ifUnused, bool ifEmpty) : Operation<object>(server)
+internal class QueueDeleteOperation(IRabbitServer server, string queue, bool ifUnused, bool ifEmpty) : Operation(server)
 {
     public override bool IsValid => !(Server is null || string.IsNullOrWhiteSpace(queue));
 
-    public override async ValueTask<OperationResult<object>> ExecuteAsync(CancellationToken cancellationToken)
+    public override async ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
     {
         try
         { 
             if(!IsValid)
             {
-                return OperationResult.Failure<object>(new InvalidOperationException("Queue name is required."));
+                return OperationResult.Failure(new InvalidOperationException("Queue name is required."));
             }
 
             // check if the queue exists.
@@ -21,19 +21,19 @@ internal class QueueDeleteOperation(IRabbitServer server, string queue, bool ifU
             if (queueInstance is null)
             {
                 // if the queue does not exist, silently report a failure.
-                return OperationResult.Failure<object>($"Queue '{queue}' not found.");
+                return OperationResult.Warning($"Queue '{queue}' not found.");
             }
 
             // make sure that we don't delete a non-empty queue if 'ifEmpty' is specified.
             if (ifEmpty && queueInstance.MessageCount > 0)
             {
-                return OperationResult.Failure<object>(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Cannot delete queue '{queue}'. The queue is not empty.")));
+                return OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Cannot delete queue '{queue}'. The queue is not empty.")));
             }
 
             // make sure that we don't delete a queue with consumers if 'ifUnused' is specified.
             if (ifUnused && queueInstance.ConsumerCount > 0)
             {
-                return OperationResult.Failure<object>(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Cannot delete queue '{queue}'. The queue is in use.")));
+                return OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Cannot delete queue '{queue}'. The queue is in use.")));
             }
 
             // okay, we are good to go. first, we remove all bindings in which the queue is involved.
@@ -42,13 +42,18 @@ internal class QueueDeleteOperation(IRabbitServer server, string queue, bool ifU
             {
                 var bindingKey = item.Key;
                 var operation = new QueueUnbindOperation(Server, item.Value.Exchange, queue, bindingKey);
-                await Server.Processor.EnqueueOperationAsync<object>(operation);
+                await Server.Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
             }
 
-            if (Server.Queues.Remove(queue))
+            // remove the queue from the server. if remove returns false, the queue may have been removed by another thread.
+            // in that case, we return a success message.
+            if (!Server.Queues.Remove(queue))
             {
-                // sucessfully removed the queue. remove all bindings where the queue
+                return OperationResult.Warning($"Queue '{queue}' not found.");
             }
+
+            // 8return success
+            return OperationResult.Success($"Queue '{queue}' deleted successfully.");
         }
         catch (Exception ex)
         {

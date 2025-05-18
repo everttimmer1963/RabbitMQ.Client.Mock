@@ -1,6 +1,7 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Client.Mock.Server.Bindings;
+using RabbitMQ.Client.Mock.Server.Data;
 using RabbitMQ.Client.Mock.Server.Exchanges;
 using RabbitMQ.Client.Mock.Server.Operations;
 using RabbitMQ.Client.Mock.Server.Queues;
@@ -22,32 +23,78 @@ internal class RabbitServer : IRabbitServer
     public IDictionary<string, ExchangeBinding> ExchangeBindings { get; } = new ConcurrentDictionary<string, ExchangeBinding>();
     public IDictionary<string, QueueBinding> QueueBindings { get; } = new ConcurrentDictionary<string, QueueBinding>();
     public IDictionary<string, ConsumerBinding> ConsumerBindings { get; } = new ConcurrentDictionary<string, ConsumerBinding>();
+    public IDictionary<(int,ulong),PendingConfirm> PendingConfirms { get; } = new ConcurrentDictionary<(int, ulong),PendingConfirm>();
+    public IDictionary<int, IChannel> Channels { get; } = new ConcurrentDictionary<int, IChannel>();
 
     public OperationsProcessor Processor { get; private set; }
     #endregion
 
-    #region Channel Interface Implementation
-    public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default)
+    #region Server Side Names Generation
+    public ValueTask<string> GenerateUniqueConsumerTag(string queueName)
     {
-        throw new NotImplementedException();
+        return ValueTask.FromResult($"consumer-{queueName.ToLowerInvariant()}-{Guid.NewGuid().ToString("D")}");
+    }
+    #endregion
+
+    #region Channel Registration
+    public void RegisterChannel(int channelNumber, IChannel channel)
+    {
+        if (channel is null)
+        {
+            throw new ArgumentNullException(nameof(channel));
+        }
+        if (Channels.ContainsKey(channelNumber))
+        {
+            throw new InvalidOperationException($"Channel '{channelNumber}' already registered.");
+        }
+        Channels[channelNumber] = channel;
     }
 
-    public Task BasicCancelAsync(string consumerTag, bool noWait = false, CancellationToken cancellationToken = default)
+    public void UnregisterChannel(int channelNumber)
     {
-        throw new NotImplementedException();
+        if (Channels.ContainsKey(channelNumber))
+        {
+            Channels.Remove(channelNumber);
+        }
+    }
+    #endregion
+
+    #region Channel Forwarded Implementation
+    public async ValueTask BasicAckAsync(int channelNumber, ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default)
+    {
+        var operation = new BasicAckAsyncOperation(this, channelNumber, deliveryTag, multiple);
+        var outcome = await Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
+        await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
-    public Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
+    public async Task BasicCancelAsync(string consumerTag, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var operation = new BasicCancelAsyncOperation(this, consumerTag);
+        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken);
+        if(noWait)
+        {
+            // if noWait is true, we don't need to wait for the operation to complete.
+            Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
+            return;
+        }
+        await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
-    public Task<BasicGetResult?> BasicGetAsync(string queue, bool autoAck, CancellationToken cancellationToken = default)
+    public async Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var operation = new BasicConsumeAsyncOperation(this, queue, autoAck, consumerTag, noLocal, exclusive, arguments, consumer);
+        var outcome = await Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
+        return await HandleOperationResult<string>(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
-    public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default)
+    public async Task<BasicGetResult?> BasicGetAsync(int channelNumber, string queue, bool autoAck, CancellationToken cancellationToken = default)
+    {
+        var operation = new BasicGetAsyncOperation(this, channelNumber, queue, autoAck);
+        var outcome = await Processor.EnqueueOperationAsync(operation);
+        return await HandleOperationResult<BasicGetResult>(outcome, operation.OperationId).ConfigureAwait(false);
+    }
+
+    public ValueTask BasicNackAsync(int channelNumber, ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
@@ -90,39 +137,38 @@ internal class RabbitServer : IRabbitServer
     public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
     {
         var operation = new ExchangeBindOperation(this, source, destination, routingKey, arguments);
-        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken);
+        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (noWait)
         {
             Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
+            return;
         }
-        if (outcome is { IsFailure: true, Exception: not null })
-        {
-            throw outcome.Exception;
-        }
+
+        await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
     public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
         var operation = new ExchangeDeclareOperation(this, exchange, type, durable, autoDelete, arguments, passive);
-        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken);
+        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (noWait)
         {
             Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
+            return;
         }
-        if (outcome is { IsFailure: true, Exception: not null })
-        {
-            throw outcome.Exception;
-        }
+        await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
-    public Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default)
+    public async Task ExchangeDeclarePassiveAsync(string exchange, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var operation = new ExchangeDeclarePassiveOperation(this, exchange);
+        var outcome = await Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
+        await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
     public Task ExchangeDeleteAsync(string exchange, bool ifUnused = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var operation = new ExchangeDeleteOperation(this, exchange, ifUnused);
     }
 
     public async Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
@@ -164,24 +210,38 @@ internal class RabbitServer : IRabbitServer
     public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
     {
         var operation = new QueueDeclareOperation(this, queue, durable, exclusive, autoDelete, arguments, passive);
-        var outcome = await Processor.EnqueueOperationAsync<QueueDeclareOk>(operation, noWait, true, cancellationToken: cancellationToken);
+        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken);
         if (noWait)
         {
+            // if noWait is true, we don't need to wait for the operation to complete.
             Console.WriteLine($"Operation: {operation.OperationId.ToString()} is queued for processing.");
             return new QueueDeclareOk(queue, 0, 0);
         }
 
-        if (outcome is { IsFailure: true, Exception: not null })
-        {
-            throw outcome.Exception;
-        }
-
-        if (outcome is not { Result: not null })
+        // the call was synchronous so we should have an oeration result.
+        if (outcome is null)
         {
             throw new InvalidOperationException($"Operation: {operation.OperationId.ToString()} - The operation did not return a result.");
         }
 
-        return outcome.Result;
+        // if the outcome reports a failure, and an exception is included, we should throw it.
+        if (outcome is { IsFailure: true })
+        {
+            // if the outcome has an exception, we should throw it.
+            if (outcome.Exception is not null)
+            {
+                throw outcome.Exception;
+            }
+        }
+
+        // this method should return a QueueDeclareOk result, so if the result is null, we should throw an exception.
+        var result = outcome.GetResult<QueueDeclareOk>();
+        if(result is null)
+        {
+            throw new InvalidOperationException($"Operation: {operation.OperationId.ToString()} - The operation did not return a result.");
+        }
+
+        return result;
     }
 
     public Task<QueueDeclareOk> QueueDeclarePassiveAsync(string queue, CancellationToken cancellationToken = default)
@@ -226,4 +286,47 @@ internal class RabbitServer : IRabbitServer
         await exchangeInstance.QueueUnbindAsync(queue, routingKey, false, cancellationToken);
     }
     #endregion
+
+    private ValueTask HandleOperationResult(OperationResult? outcome, Guid operationId)
+    {
+        if (outcome is null)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        // if the outcome reports a failure, and an exception is included, we should throw it.
+        if (outcome is { Exception: not null })
+        {
+            throw outcome.Exception;
+        }
+
+        // if the outcome is a success, we should log it.
+        Console.WriteLine($"Operation: {operationId.ToString()} - {outcome.Message}");
+        return ValueTask.CompletedTask;
+    }
+
+    private ValueTask<TResult> HandleOperationResult<TResult>(OperationResult? outcome, Guid operationId) where TResult : class
+    {
+        // an operation result is expected to be returned.
+        if (outcome is null)
+        { 
+            throw new InvalidOperationException($"Operation '{operationId}': - The operation did not return a result.");
+        }
+
+        // if the outcome reports a failure, and an exception is included, we should throw it.
+        if (outcome is { Exception: not null })
+        {
+            throw outcome.Exception;
+        }
+
+        // this method should return a TResult result, so if the result is null, we should throw an exception.
+        var result = outcome.GetResult<TResult>();
+        if (result is null)
+        {
+            throw new InvalidOperationException($"Operation '{operationId}': - The operation did not return a result.");
+        }
+
+        // return the return value.
+        return ValueTask.FromResult(result);
+    }
 }

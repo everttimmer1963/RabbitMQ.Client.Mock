@@ -3,6 +3,7 @@
 internal enum OperationResultStatus
 {
     Success,
+    Warning,
     Failure,
     Timeout
 }

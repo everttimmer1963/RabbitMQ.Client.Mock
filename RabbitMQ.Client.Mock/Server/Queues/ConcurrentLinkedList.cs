@@ -176,6 +176,31 @@ internal class ConcurrentLinkedList<T> : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Removes the first node from the <see cref="ConcurrentLinkedList{T}"/> and returns its value.
+    /// </summary>
+    /// <param name="value">The node that was removed.</param>
+    /// <returns><see langword="True"/> if the first node was removed succesfully; otherwise <see langword="False"/>. <see cref="TryRemoveFirst(out T?)"/> also returns fals if the list contains no nodes.</returns>
+    public bool TryRemoveFirst(out T? value)
+    {
+        _semaphore.Wait();
+        try
+        {
+            if (_list.First is null)
+            {
+                value = default;
+                return false;
+            }
+            value = _list.First.Value;
+            _list.RemoveFirst();
+            return true;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    /// <summary>
     /// Removes all nodes from the <see cref="ConcurrentLinkedList{T}"/>."/>
     /// </summary>
     public void Clear()

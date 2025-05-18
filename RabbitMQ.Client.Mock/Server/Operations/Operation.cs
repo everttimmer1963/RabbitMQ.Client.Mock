@@ -10,5 +10,5 @@ internal abstract class Operation(IRabbitServer server)
 
     public abstract bool IsValid { get; }
 
-    public abstract ValueTask<OperationResult<TResult>> ExecuteAsync<TResult>(CancellationToken cancellationToken) where TResult : class;
+    public abstract ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken);
 }

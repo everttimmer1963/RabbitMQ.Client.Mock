@@ -12,21 +12,21 @@ internal class QueueUnbindOperation(IRabbitServer server, RabbitExchange exchang
         { 
             if(!IsValid)
             {
-                return ValueTask.FromResult(OperationResult.Failure("Exchange, Queue and BindingKey are required."));
+                return ValueTask.FromResult(OperationResult.Warning("Exchange, Queue and BindingKey are required."));
             }
 
             // get the queue to unbind.
             var queueToUnbind = Server.Queues.TryGetValue(queue, out var q) ? q : null;
             if (queueToUnbind is null)
             {
-                return ValueTask.FromResult(OperationResult.Failure($"Queue '{queue}' not found."));
+                return ValueTask.FromResult(OperationResult.Warning($"Queue '{queue}' not found."));
             }
 
             // check if we have a binding
             var binding = Server.QueueBindings.TryGetValue(bindingKey, out var bnd) ? bnd : null;
             if (binding is null)
             {
-                return ValueTask.FromResult(OperationResult.Failure($"Binding '{bindingKey}' not found."));
+                return ValueTask.FromResult(OperationResult.Warning($"Binding '{bindingKey}' not found."));
             }
 
             // remove the target queue from the binding

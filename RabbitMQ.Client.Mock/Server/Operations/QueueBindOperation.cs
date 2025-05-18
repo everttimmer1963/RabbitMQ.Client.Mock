@@ -1,34 +1,33 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Client.Mock.Server.Bindings;
-using RabbitMQ.Client.Mock.Server.Exchanges;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
-internal class QueueBindOperation(IRabbitServer server, string exchange, string queue, string bindingKey, IDictionary<string, object?>? arguments = null) : Operation<object>(server)
+internal class QueueBindOperation(IRabbitServer server, string exchange, string queue, string bindingKey, IDictionary<string, object?>? arguments = null) : Operation(server)
 {
     public override bool IsValid => !(Server is null || string.IsNullOrWhiteSpace(exchange) || string.IsNullOrWhiteSpace(queue) || string.IsNullOrWhiteSpace(bindingKey));
 
-    public override ValueTask<OperationResult<object>> ExecuteAsync(CancellationToken cancellationToken)
+    public override ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
     {
         try
         {
             if(!IsValid)
             {
-                return ValueTask.FromResult(OperationResult.Failure<object>(new InvalidOperationException("Exchange, Queue and BindingKey are required.")));
+                return ValueTask.FromResult(OperationResult.Failure(new InvalidOperationException("Exchange, Queue and BindingKey are required.")));
             }
 
             // get the exchange to bind to.
             var exchangeToBind = Server.Exchanges.TryGetValue(exchange, out var x) ? x : null;
             if (exchangeToBind is null)
             {
-                return ValueTask.FromResult(OperationResult.Failure<object>(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Exchange '{exchange}' not found."))));
+                return ValueTask.FromResult(OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Exchange '{exchange}' not found."))));
             }
 
             // get the queue to bind.
             var queueToBind = Server.Queues.TryGetValue(queue, out var q) ? q : null;
             if (queueToBind is null)
             {
-                return ValueTask.FromResult(OperationResult.Failure<object>(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Queue '{queue}' not found."))));
+                return ValueTask.FromResult(OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Queue '{queue}' not found."))));
             }
 
             // check if we already have binding. if we don't, create a new one.
@@ -38,21 +37,21 @@ internal class QueueBindOperation(IRabbitServer server, string exchange, string 
                 binding = new QueueBinding { Exchange = exchangeToBind, Arguments = arguments };
                 binding.BoundQueues.Add(queue, queueToBind);
 
-                return ValueTask.FromResult(OperationResult.Success<object>($"Queue '{queue}' bound to exchange '{exchange}' with key '{bindingKey}'."));
+                return ValueTask.FromResult(OperationResult.Success($"Queue '{queue}' bound to exchange '{exchange}' with key '{bindingKey}'."));
             }
 
             // the binding exists. check if the target queue is already bound. If so, return success.
             if (!binding.BoundQueues.TryAdd(queue, queueToBind))
             {
-                return ValueTask.FromResult(OperationResult.Success<object>($"Queue '{queue}' already bound to exchange '{exchange}' with key '{bindingKey}'."));
+                return ValueTask.FromResult(OperationResult.Success($"Queue '{queue}' already bound to exchange '{exchange}' with key '{bindingKey}'."));
             }
 
             // the binding was added. return success.
-            return ValueTask.FromResult(OperationResult.Success<object>($"Queue '{queue}' bound to exchange '{exchange}' with key '{bindingKey}'."));
+            return ValueTask.FromResult(OperationResult.Success($"Queue '{queue}' bound to exchange '{exchange}' with key '{bindingKey}'."));
         }
         catch (Exception ex)
         {
-            return ValueTask.FromResult(OperationResult.Failure<object>(ex));
+            return ValueTask.FromResult(OperationResult.Failure(ex));
         }
     }
 }
