@@ -16,7 +16,7 @@ internal class OperationResult(object? result = null)
 
     public Exception? Exception { get; protected set; }
 
-    public TResult? GetResult<TResult>() where TResult : class
+    public TResult? GetResult<TResult>()
     {
         return result switch
         {

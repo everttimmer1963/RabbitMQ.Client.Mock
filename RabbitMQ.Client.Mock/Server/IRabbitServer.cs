@@ -23,9 +23,9 @@ internal interface IRabbitServer
     #region Server Interface
     ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default(CancellationToken));
 
-    ValueTask BasicAckAsync(int channelNumber, ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default(CancellationToken));
+    ValueTask BasicAckAsync(FakeChannel channel, ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default(CancellationToken));
 
-    ValueTask BasicNackAsync(int channelNumber, ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default(CancellationToken));
+    ValueTask BasicNackAsync(FakeChannel channel, ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default(CancellationToken));
 
     Task BasicCancelAsync(string consumerTag, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
 
@@ -33,13 +33,13 @@ internal interface IRabbitServer
 
     Task<BasicGetResult?> BasicGetAsync(int channelNumber, string queue, bool autoAck, CancellationToken cancellationToken = default(CancellationToken));
 
-    ValueTask BasicPublishAsync<TProperties>(string exchange, string routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default(CancellationToken)) where TProperties : IReadOnlyBasicProperties, IAmqpHeader;
+    ValueTask BasicPublishAsync<TProperties>(FakeChannel channel, string exchange, string routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default(CancellationToken)) where TProperties : IReadOnlyBasicProperties, IAmqpHeader;
 
-    ValueTask BasicPublishAsync<TProperties>(CachedString exchange, CachedString routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default(CancellationToken)) where TProperties : IReadOnlyBasicProperties, IAmqpHeader;
+    ValueTask BasicPublishAsync<TProperties>(FakeChannel channel, CachedString exchange, CachedString routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default(CancellationToken)) where TProperties : IReadOnlyBasicProperties, IAmqpHeader;
 
     Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken = default(CancellationToken));
 
-    ValueTask BasicRejectAsync(ulong deliveryTag, bool requeue, CancellationToken cancellationToken = default(CancellationToken));
+    ValueTask BasicRejectAsync(FakeChannel channel, ulong deliveryTag, bool requeue, CancellationToken cancellationToken = default(CancellationToken));
 
     Task CloseAsync(ushort replyCode, string replyText, bool abort, CancellationToken cancellationToken = default(CancellationToken));
 
@@ -76,5 +76,7 @@ internal interface IRabbitServer
     void UnregisterChannel(int channelNumber);
 
     ValueTask<string> GenerateUniqueConsumerTag(string queueName);
+
+    ValueTask<ulong> GetNextDeliveryTagForChannel(int channelNumber);
     #endregion
 }

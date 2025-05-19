@@ -4,7 +4,7 @@ using RabbitMQ.Client.Mock.Server.Bindings;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
-internal class BasicConsumeAsyncOperation(IRabbitServer server, string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer) : Operation(server)
+internal class BasicConsumeOperation(IRabbitServer server, string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer) : Operation(server)
 {
     public override bool IsValid => !(Server is null || string.IsNullOrEmpty(queue) || consumer is null);
 

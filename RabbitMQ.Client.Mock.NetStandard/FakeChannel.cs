@@ -43,6 +43,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
 
         public TimeSpan ContinuationTimeout { get; set; }
 
+        #region Events
         private AsyncEventingWrapper<BasicAckEventArgs> _basicAcksAsyncWrapper;
         private AsyncEventingWrapper<BasicNackEventArgs> _basicNacksAsyncWrapper;
         private AsyncEventingWrapper<BasicReturnEventArgs> _basicReturnAsyncWrapper;
@@ -53,11 +54,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
         public event AsyncEventHandler<BasicAckEventArgs> BasicAcksAsync = null!;
         public event AsyncEventHandler<BasicNackEventArgs> BasicNacksAsync = null!;
         public event AsyncEventHandler<ShutdownEventArgs> ChannelShutdownAsync = null!;
-        public event AsyncEventHandler<BasicReturnEventArgs> BasicReturnAsync
-        {
-            add => throw new NotImplementedException();
-            remove => throw new NotImplementedException();
-        }
+        public event AsyncEventHandler<BasicReturnEventArgs> BasicReturnAsync = null!;
         public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
         {
             add => throw new NotImplementedException();
@@ -68,6 +65,12 @@ namespace RabbitMQ.Client.Mock.NetStandard
             add => throw new NotImplementedException();
             remove => throw new NotImplementedException();
         }
+
+        public Task HandleBasicReturnAsync(BasicReturnEventArgs args)
+        {
+            return _basicReturnAsyncWrapper.InvokeAsync(this, args);
+        }
+        #endregion
 
         public async ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default)
         {

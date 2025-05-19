@@ -38,6 +38,7 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
 
     public TimeSpan ContinuationTimeout { get; set; }
 
+    #region Events
     private AsyncEventingWrapper<BasicAckEventArgs> _basicAcksAsyncWrapper;
     private AsyncEventingWrapper<BasicNackEventArgs> _basicNacksAsyncWrapper;
     private AsyncEventingWrapper<BasicReturnEventArgs> _basicReturnAsyncWrapper;
@@ -48,21 +49,40 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
     public event AsyncEventHandler<BasicAckEventArgs> BasicAcksAsync = null!;
     public event AsyncEventHandler<BasicNackEventArgs> BasicNacksAsync = null!;
     public event AsyncEventHandler<ShutdownEventArgs> ChannelShutdownAsync = null!;
-    public event AsyncEventHandler<BasicReturnEventArgs> BasicReturnAsync
-    { 
-        add => throw new NotImplementedException();
-        remove => throw new NotImplementedException();
-    }
-    public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
+    public event AsyncEventHandler<BasicReturnEventArgs> BasicReturnAsync = null!;
+    public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync = null!;
+    public event AsyncEventHandler<FlowControlEventArgs> FlowControlAsync = null!;
+
+    public Task HandleBasicReturnAsync(BasicReturnEventArgs args)
     {
-        add => throw new NotImplementedException();
-        remove => throw new NotImplementedException();
+        return _basicReturnAsyncWrapper.InvokeAsync(this, args);
     }
-    public event AsyncEventHandler<FlowControlEventArgs> FlowControlAsync
+
+    public Task HandleBasicAckAsync(BasicAckEventArgs args)
     {
-        add => throw new NotImplementedException();
-        remove => throw new NotImplementedException();
+        return _basicAcksAsyncWrapper.InvokeAsync(this, args);
     }
+
+    public Task HandleBasicNackAsync(BasicNackEventArgs args)
+    {
+        return _basicNacksAsyncWrapper.InvokeAsync(this, args);
+    }
+
+    public Task HandleChannelShutdownAsync(ShutdownEventArgs args)
+    {
+        return _channelShutdownAsyncWrapper.InvokeAsync(this, args);
+    }
+
+    public Task HandleCallbackExceptionAsync(CallbackExceptionEventArgs args)
+    {
+        return _callbackExceptionAsyncWrapper.InvokeAsync(this, args);
+    }
+
+    public Task HandleFlowControlAsync(FlowControlEventArgs args)
+    {
+        return _flowControlAsyncWrapper.InvokeAsync(this, args);
+    }
+    #endregion
 
     public async ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken = default)
     {

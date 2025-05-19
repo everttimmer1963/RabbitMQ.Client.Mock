@@ -4,7 +4,7 @@ using RabbitMQ.Client.Mock.Server.Queues;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
-internal class BasicGetAsyncOperation(IRabbitServer server, int channelNumber, string queue, bool autoAck) : Operation(server)
+internal class BasicGetOperation(IRabbitServer server, int channelNumber, string queue, bool autoAck) : Operation(server)
 {
     public override bool IsValid => !(Server is null || string.IsNullOrEmpty(queue));
 

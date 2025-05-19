@@ -1,6 +1,6 @@
 ﻿
 namespace RabbitMQ.Client.Mock.Server.Operations;
-internal class BasicCancelAsyncOperation(IRabbitServer server, string consumerTag) : Operation(server)
+internal class BasicCancelOperation(IRabbitServer server, string consumerTag) : Operation(server)
 {
     public override bool IsValid => !(Server is null || string.IsNullOrEmpty(consumerTag));
 

@@ -38,6 +38,21 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
         .Where(cb => cb.Value.Queue.Name.Equals(Name))
         .ToDictionary(cb => cb.Key, cb => cb.Value);
 
+    internal bool TryGetDeadLetterQueueInfoAsync(out string? exchange, out string? routingKey)
+    {
+        if (Arguments is null)
+        {
+            exchange = null;
+            routingKey = null;
+            return false;
+        }
+
+        exchange = Arguments.TryGetValue("x-dead-letter-exchange", out var ex) ? (string)ex! : null;
+        routingKey = Arguments.TryGetValue("x-dead-letter-routing-key", out var rk) ? (string)rk! : null;
+
+        return (exchange is not null && routingKey is not null);
+    }
+
     public async ValueTask<RabbitMessage?> ConsumeMessageAsync(int channelNumber, bool autoAcknowledge)
     {
         var message = _queue.TryRemoveFirst(out var msg) ? msg : null;
@@ -148,10 +163,5 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
         _disposed = true;
 
         _waitHandle.Dispose();
-    }
-
-    internal bool TryGetDeadLetterQueueInfoAsync(out string? exchange, out string? routingKey)
-    {
-        throw new NotImplementedException();
     }
 }
