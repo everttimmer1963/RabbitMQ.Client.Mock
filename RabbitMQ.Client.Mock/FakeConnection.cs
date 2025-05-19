@@ -5,6 +5,8 @@ namespace RabbitMQ.Client.Mock;
 
 internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 {
+    public const int DefaultRemotePort = 5672;
+
     private static int _lastConnectionNumber;
 
     private bool _disposed;
@@ -18,6 +20,7 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
         _options = options;
         _server = new RabbitServer();
         _connectionNumber = GetNextConnectionNumber();
+        IsOpen = true;
     }
 
     public ushort ChannelMax => _options.ChannelMax;
@@ -44,7 +47,7 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
     public int LocalPort { get; set; }
 
-    public int RemotePort { get; set; }
+    public int RemotePort { get; set; } = DefaultRemotePort;
 
     public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
     { 
