@@ -41,7 +41,7 @@ internal class QueueDeleteOperation(IRabbitServer server, string queue, bool ifU
             foreach (var item in queueBindings)
             {
                 var bindingKey = item.Key;
-                var operation = new QueueUnbindOperation(Server, item.Value.Exchange, queue, bindingKey);
+                var operation = new QueueUnbindOperation(Server, item.Value.Exchange.Name, queue, bindingKey);
                 await Server.Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
             }
 

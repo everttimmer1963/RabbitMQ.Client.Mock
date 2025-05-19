@@ -2,7 +2,7 @@
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
-internal class QueueUnbindOperation(IRabbitServer server, RabbitExchange exchange, string queue, string bindingKey, IDictionary<string, object?>? arguments = null) : Operation(server)
+internal class QueueUnbindOperation(IRabbitServer server, string exchange, string queue, string bindingKey, IDictionary<string, object?>? arguments = null) : Operation(server)
 {
     public override bool IsValid => !(Server is null || exchange is null || string.IsNullOrWhiteSpace(queue) || string.IsNullOrWhiteSpace(bindingKey));
 
@@ -13,6 +13,13 @@ internal class QueueUnbindOperation(IRabbitServer server, RabbitExchange exchang
             if(!IsValid)
             {
                 return ValueTask.FromResult(OperationResult.Warning("Exchange, Queue and BindingKey are required."));
+            }
+
+            // get the exchange to unbind from
+            var exchangeToUnbindFrom = Server.Exchanges.TryGetValue(exchange, out var x) ? x : null;
+            if (exchangeToUnbindFrom is null)
+            {
+                return ValueTask.FromResult(OperationResult.Warning($"Exchange '{exchange}' not found."));
             }
 
             // get the queue to unbind.
@@ -32,7 +39,7 @@ internal class QueueUnbindOperation(IRabbitServer server, RabbitExchange exchang
             // remove the target queue from the binding
             if (!binding.BoundQueues.Remove(queue))
             {
-                return ValueTask.FromResult(OperationResult.Success($"Queue '{queueToUnbind.Name}' has already been unbound from exchange '{exchange.Name}' with key '{bindingKey}'."));
+                return ValueTask.FromResult(OperationResult.Success($"Queue '{queueToUnbind.Name}' has already been unbound from exchange '{exchangeToUnbindFrom.Name}' with key '{bindingKey}'."));
             }
 
             // check if the binding is empty and if so, remove it
@@ -43,7 +50,7 @@ internal class QueueUnbindOperation(IRabbitServer server, RabbitExchange exchang
             }
 
             // the queue binding was removed. return success.
-            return ValueTask.FromResult(OperationResult.Success($"Queue '{queueToUnbind.Name}' unbound from exchange '{exchange.Name}' with key '{bindingKey}'."));
+            return ValueTask.FromResult(OperationResult.Success($"Queue '{queueToUnbind.Name}' unbound from exchange '{exchangeToUnbindFrom.Name}' with key '{bindingKey}'."));
         }
         catch (Exception ex)
         {

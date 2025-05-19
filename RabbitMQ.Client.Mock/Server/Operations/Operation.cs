@@ -8,7 +8,7 @@ internal abstract class Operation(IRabbitServer server)
 
     public Guid OperationId { get; } = Guid.NewGuid();
 
-    public abstract bool IsValid { get; }
+    public virtual bool IsValid => !(Server is not null);
 
     public abstract ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken);
 }

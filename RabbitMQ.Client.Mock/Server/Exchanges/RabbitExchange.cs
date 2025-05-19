@@ -24,18 +24,6 @@ internal abstract class RabbitExchange(IRabbitServer server, string name, string
     public IReadOnlyDictionary<string, QueueBinding> QueueBindings => new ReadOnlyDictionary<string, QueueBinding>(Server.QueueBindings.Where(b => b.Value.Exchange.Name.Equals(Name)).ToDictionary(kvp => kvp.Key, KeyValuePair => KeyValuePair.Value));
     #endregion
 
-    #region Exchange Bindings
-    public abstract ValueTask ExchangeBindAsync(string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default);
-
-    public abstract ValueTask ExchangeUnbindAsync(string exchange, string routingKey, bool noWait = false, CancellationToken cancellationToken = default);
-    #endregion
-
-    #region Queue Bindings
-    public abstract ValueTask QueueBindAsync(string queue, string bindingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default);
-
-    public abstract ValueTask QueueUnbindAsync(string queue, string bindingKey, bool noWait = false, CancellationToken cancellationToken = default);
-    #endregion
-
     #region Message Publishing
     public abstract ValueTask PublishMessageAsync(string routingKey, RabbitMessage message);
     #endregion

@@ -1,5 +1,4 @@
-﻿using RabbitMQ.Client.Mock.Domain;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Security.Authentication;
 using System.Text;
 

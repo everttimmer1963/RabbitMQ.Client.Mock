@@ -1,6 +1,5 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
-using RabbitMQ.Client.Mock.Domain;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
@@ -19,13 +18,13 @@ internal class QueueDeclarePassiveOperation(IRabbitServer server, string queue) 
             }
 
             // get the exchange to bind to
-            var xchg = Server.Queues.TryGetValue(queue, out var x) ? x : null;
-            if (xchg is null)
+            var queueInstance = Server.Queues.TryGetValue(queue, out var x) ? x : null;
+            if (queueInstance is null)
             {
-                return ValueTask.FromResult(OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Exchange '{exchange}' not found."))));
+                return ValueTask.FromResult(OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Queue '{queue}' not found."))));
             }
 
-            return ValueTask.FromResult(OperationResult.Success($"Exchange '{queue}' exists."));
+            return ValueTask.FromResult(OperationResult.Success($"Queue '{queue}' exists."));
         }
         catch (Exception ex)
         {

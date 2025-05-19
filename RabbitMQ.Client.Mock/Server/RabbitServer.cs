@@ -235,34 +235,25 @@ internal class RabbitServer : IRabbitServer
         return await HandleOperationResult<QueueDeclareOk>(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
-    public Task<uint> QueueDeleteAsync(string queue, bool ifUnused, bool ifEmpty, bool noWait = false, CancellationToken cancellationToken = default)
+    public async Task<uint> QueueDeleteAsync(string queue, bool ifUnused, bool ifEmpty, bool noWait = false, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var operation = new QueueDeleteOperation(this, queue, ifUnused, ifEmpty);
+        var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken);
+        return await HandleOperationResult<uint>(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
     public async Task<uint> QueuePurgeAsync(string queue, CancellationToken cancellationToken = default)
     {
-        // get the queue instance
-        var queueInstance = Queues.TryGetValue(queue, out var q) ? q : null;
-        if (queueInstance is null)
-        {
-            throw new ArgumentException($"Queue '{queue}' not found.");
-        }
-
-        // now purge the queue
-        return await queueInstance.PurgeAsync();
+        var operation = new QueuePurgeOperation(this, queue);
+        var outcome = await Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
+        return await HandleOperationResult<uint>(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
     public async Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
     {
-        // get the source exchange
-        var exchangeInstance = Exchanges.TryGetValue(exchange, out var x) ? x : null;
-        if (exchangeInstance is null)
-        {
-            throw new ArgumentException($"Exchange '{exchange}' not found.");
-        }
-        // now unbind the queue from the exchange
-        await exchangeInstance.QueueUnbindAsync(queue, routingKey, false, cancellationToken);
+        var operation = new QueueUnbindOperation(this, exchange, queue, routingKey, arguments);
+        var outcome = await Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
+        await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
     }
     #endregion
 

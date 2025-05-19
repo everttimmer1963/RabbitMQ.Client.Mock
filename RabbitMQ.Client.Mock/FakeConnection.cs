@@ -1,4 +1,5 @@
 ﻿using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Mock.Server;
 
 namespace RabbitMQ.Client.Mock;
 
@@ -10,14 +11,14 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
     private int _connectionNumber;
     private readonly FakeConnectionOptions _options;
     private readonly List<IChannel> _channels = new();
+    private IRabbitServer _server;
 
     public FakeConnection(FakeConnectionOptions options)
     {
         _options = options;
+        _server = new RabbitServer();
         _connectionNumber = GetNextConnectionNumber();
     }
-
-    private RabbitMQServer Server => RabbitMQServer.GetInstance(_connectionNumber);
 
     public ushort ChannelMax => _options.ChannelMax;
 
@@ -73,14 +74,14 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
     public Task<IChannel> CreateChannelAsync(CreateChannelOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var channel = new FakeChannel(options, _connectionNumber);
+        var channel = new FakeChannel(_server, options, _connectionNumber);
         _channels.Add(channel);
         return Task.FromResult<IChannel>(channel);
     }
 
     public Task UpdateSecretAsync(string newSecret, string reason, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return Task.CompletedTask;
     }
 
     private static int GetNextConnectionNumber()
@@ -105,6 +106,5 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
         }
 
         _channels.Clear();
-        await Server.HandleDisconnectAsync(_connectionNumber);
     }
 }
