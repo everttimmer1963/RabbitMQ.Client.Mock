@@ -1,12 +1,13 @@
 ﻿
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Mock.Server.Data;
+using RabbitMQ.Client.Mock.Server.Exchanges;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
 internal class BasicPublishOperation<TProperties>(IRabbitServer server, FakeChannel channel, string exchange, string routingKey, bool mandatory, TProperties properties, ReadOnlyMemory<byte> body) : Operation(server) where TProperties : IReadOnlyBasicProperties, IAmqpHeader
 {
-    public override bool IsValid => !(Server is null || channel is null || string.IsNullOrEmpty(exchange) || string.IsNullOrEmpty(routingKey) || body.IsEmpty);
+    public override bool IsValid => !(Server is null || channel is null || body.IsEmpty);
 
     public async override ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -17,17 +18,28 @@ internal class BasicPublishOperation<TProperties>(IRabbitServer server, FakeChan
                 return OperationResult.Warning("Either Server, exchange, routingkey or body is null or empty.");
             }
 
+            RabbitExchange? exchangeInstance = null;
+
             // get the exchange that we are publishing to.
-            var exchangeInstance = Server.Exchanges.TryGetValue(exchange, out var ex) ? ex : default;
-            if (exchangeInstance is null)
+            if (exchange == string.Empty)
             {
-                // if mandatory is specified, and we cannot deliver the message, we should send the message back to the client,
-                // and return with a warning.
-                if (mandatory)
+                // this is the default exchange. just temporarily create a new exchange instance
+                // that we can publish to.
+                exchangeInstance = new DirectExchange(server, string.Empty);
+            }
+            else
+            {
+                exchangeInstance = Server.Exchanges.TryGetValue(exchange, out var ex) ? ex : default;
+                if (exchangeInstance is null)
                 {
-                    await channel.HandleBasicReturnAsync(new BasicReturnEventArgs(0, $"Exchange '{exchange}' not found.", exchange, routingKey, properties, body));
+                    // if mandatory is specified, and we cannot deliver the message, we should send the message back to the client,
+                    // and return with a warning.
+                    if (mandatory)
+                    {
+                        await channel.HandleBasicReturnAsync(new BasicReturnEventArgs(0, $"Exchange '{exchange}' not found.", exchange, routingKey, properties, body));
+                    }
+                    return OperationResult.Warning($"Exchange '{exchange}' not found.");
                 }
-                return OperationResult.Warning($"Exchange '{exchange}' not found.");
             }
 
             // create and publish a message to the exchange.

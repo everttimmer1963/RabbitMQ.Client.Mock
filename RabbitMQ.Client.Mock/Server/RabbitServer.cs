@@ -134,7 +134,7 @@ internal class RabbitServer : IRabbitServer
     {
         var operation = new BasicGetOperation(this, channelNumber, queue, autoAck);
         var outcome = await Processor.EnqueueOperationAsync(operation);
-        return await HandleOperationResult<BasicGetResult>(outcome, operation.OperationId).ConfigureAwait(false);
+        return await HandleOperationResult<BasicGetResult>(outcome, operation.OperationId, false).ConfigureAwait(false);
     }
 
     public async ValueTask BasicNackAsync(FakeChannel channel, ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken = default)
@@ -305,7 +305,7 @@ internal class RabbitServer : IRabbitServer
         return ValueTask.CompletedTask;
     }
 
-    private ValueTask<TResult> HandleOperationResult<TResult>(OperationResult? outcome, Guid operationId)
+    private ValueTask<TResult?> HandleOperationResult<TResult>(OperationResult? outcome, Guid operationId, bool throwOnNullResult = true)
     {
         // an operation result is expected to be returned.
         if (outcome is null)
@@ -321,7 +321,7 @@ internal class RabbitServer : IRabbitServer
 
         // this method should return a TResult result, so if the result is null, we should throw an exception.
         var result = outcome.GetResult<TResult>();
-        if (result is null)
+        if (result is null && throwOnNullResult)
         {
             throw new InvalidOperationException($"Operation '{operationId}': - The operation did not return a result.");
         }

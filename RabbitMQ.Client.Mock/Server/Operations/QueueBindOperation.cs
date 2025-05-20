@@ -42,6 +42,7 @@ internal class QueueBindOperation(IRabbitServer server, string exchange, string 
             {
                 binding = new QueueBinding { Exchange = exchangeToBind, Arguments = arguments };
                 binding.BoundQueues.Add(queue, queueToBind);
+                Server.QueueBindings.TryAdd(bindingKey, binding);
 
                 return ValueTask.FromResult(OperationResult.Success($"Queue '{queue}' bound to exchange '{exchange}' with key '{bindingKey}'."));
             }

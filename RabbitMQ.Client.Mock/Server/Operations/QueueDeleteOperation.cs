@@ -42,7 +42,7 @@ internal class QueueDeleteOperation(IRabbitServer server, string queue, bool ifU
             {
                 var bindingKey = item.Key;
                 var operation = new QueueUnbindOperation(Server, item.Value.Exchange.Name, queue, bindingKey);
-                await Server.Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
+                await Server.Processor.EnqueueOperationAsync(operation, true).ConfigureAwait(false);
             }
 
             // remove the queue from the server. if remove returns false, the queue may have been removed by another thread.

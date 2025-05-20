@@ -35,7 +35,7 @@ internal class BasicGetOperation(IRabbitServer server, int channelNumber, string
         }
     }
 
-    private BasicGetResult PrepareResult(RabbitQueue queue, RabbitMessage message)
+    private BasicGetResult PrepareResult(RabbitQueue queue, RabbitMessage? message = null)
     {
         var messageCount = queue.MessageCount;
         return new BasicGetResult(

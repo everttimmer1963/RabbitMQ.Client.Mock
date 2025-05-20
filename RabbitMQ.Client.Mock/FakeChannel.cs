@@ -8,12 +8,6 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
     private readonly CreateChannelOptions? _options;
     private readonly IRabbitServer _server;
 
-    private static int _lastChannelNumber = 0;
-    private static int GetNextChannelNumber()
-    { 
-        return Interlocked.Increment(ref _lastChannelNumber);
-    }
-
     public FakeChannel(IRabbitServer server, CreateChannelOptions? options, int connectionNumber)
     {
         _server = server;

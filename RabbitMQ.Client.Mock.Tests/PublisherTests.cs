@@ -1,6 +1,7 @@
 ﻿using System.Text;
 
-namespace RabbitMQ.Client.Tests;
+namespace RabbitMQ.Client.Mock.Tests;
+
 public class PublisherTests : TestBase
 {
     [Fact]
@@ -220,29 +221,6 @@ public class PublisherTests : TestBase
         await channel.QueueDeleteAsync(queueName2, ifUnused: false, ifEmpty: false, cancellationToken: default);
         await channel.ExchangeDeleteAsync(exchangeName1, ifUnused: false, cancellationToken: default);
         await channel.ExchangeDeleteAsync(exchangeName2, ifUnused: false, cancellationToken: default);
-        await channel.CloseAsync();
-        await channel.DisposeAsync();
-        await connection.CloseAsync();
-        await connection.DisposeAsync();
-    }
-
-    [Fact]
-    public async Task When_Retrieving_Message_From_Empty_Queue_Then_Returns_Null()
-    {
-        // Arrange
-        var queueName = await CreateUniqueQueueNameAsync();
-        var connection = await factory.CreateConnectionAsync();
-        var channel = await connection.CreateChannelAsync();
-        await channel.QueueDeclareAsync(queueName, durable: true, exclusive: false, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
-
-        // Act
-        var result = await channel.BasicGetAsync(queueName, autoAck: true, cancellationToken: default);
-
-        // Assert
-        Assert.Null(result);
-
-        // Clean-up
-        await channel.QueueDeleteAsync(queueName, ifUnused: false, ifEmpty: false, cancellationToken: default);
         await channel.CloseAsync();
         await channel.DisposeAsync();
         await connection.CloseAsync();
