@@ -19,7 +19,7 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
     {
         _options = options;
         _server = new RabbitServer();
-        _connectionNumber = GetNextConnectionNumber();
+        _connectionNumber = _server.RegisterConnection(this);
         IsOpen = true;
     }
 
@@ -41,7 +41,7 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
     public IDictionary<string, object?>? ServerProperties { get; private set; }
 
-    public IEnumerable<ShutdownReportEntry> ShutdownReport => throw new NotImplementedException();
+    public IEnumerable<ShutdownReportEntry> ShutdownReport { get; private set; } = Enumerable.Empty<ShutdownReportEntry>();
 
     public string? ClientProvidedName => _options.ClientProvidedName;
 
@@ -85,11 +85,6 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
     public Task UpdateSecretAsync(string newSecret, string reason, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
-    }
-
-    private static int GetNextConnectionNumber()
-    {
-        return Interlocked.Increment(ref _lastConnectionNumber);
     }
 
     public void Dispose()

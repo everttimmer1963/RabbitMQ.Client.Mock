@@ -18,9 +18,9 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
     {
         _server = server;
         _options = options;
-        ChannelNumber = GetNextChannelNumber();
+        ChannelNumber = Server.RegisterChannel(this);
         ConnectionNumber = connectionNumber;
-        Server.RegisterChannel(ChannelNumber, this);
+        IsOpen = true;
     }
 
     private IRabbitServer Server => _server;

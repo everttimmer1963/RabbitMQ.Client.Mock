@@ -12,6 +12,8 @@ namespace RabbitMQ.Client.Mock.Server;
 internal class RabbitServer : IRabbitServer
 {
     private ulong _publishedSequenceNumber = 0;
+    private int _lastChannelNumber = 0;
+    private int _lastConnectionNumber = 0;
 
     public RabbitServer()
     {
@@ -27,6 +29,7 @@ internal class RabbitServer : IRabbitServer
     public IDictionary<string, ConsumerBinding> ConsumerBindings { get; } = new ConcurrentDictionary<string, ConsumerBinding>();
     public IDictionary<(int Channel, ulong DeliveryTag),PendingConfirm> PendingConfirms { get; } = new ConcurrentDictionary<(int Channel, ulong DeliveryTag),PendingConfirm>();
     public IDictionary<int, IChannel> Channels { get; } = new ConcurrentDictionary<int, IChannel>();
+    public IDictionary<int, IConnection> Connections { get; } = new ConcurrentDictionary<int, IConnection>();
     public IDictionary<int, ulong> DeliveryTags { get; } = new ConcurrentDictionary<int, ulong>();
 
     public OperationsProcessor Processor { get; private set; }
@@ -49,18 +52,45 @@ internal class RabbitServer : IRabbitServer
     }
     #endregion
 
+    #region Connection Registration
+    public int RegisterConnection(IConnection connection)
+    {
+        if (connection is null)
+        {
+            throw new ArgumentNullException(nameof(connection));
+        }
+        var connectionNumber = Interlocked.Increment(ref _lastConnectionNumber);
+        if (Connections.ContainsKey(connectionNumber))
+        {
+            throw new InvalidOperationException($"Connection '{connectionNumber}' already registered.");
+        }
+        Connections[connectionNumber] = connection;
+        return connectionNumber;
+    }
+
+    public void UnregisterConnection(int connectionNumber)
+    {
+        if (Connections.ContainsKey(connectionNumber))
+        {
+            Connections.Remove(connectionNumber);
+        }
+    }
+    #endregion
+
     #region Channel Registration
-    public void RegisterChannel(int channelNumber, IChannel channel)
+    public int RegisterChannel(IChannel channel)
     {
         if (channel is null)
         {
             throw new ArgumentNullException(nameof(channel));
         }
+        var channelNumber = Interlocked.Increment(ref _lastChannelNumber);
         if (Channels.ContainsKey(channelNumber))
         {
             throw new InvalidOperationException($"Channel '{channelNumber}' already registered.");
         }
         Channels[channelNumber] = channel;
+        return channelNumber;
     }
 
     public void UnregisterChannel(int channelNumber)
@@ -141,12 +171,12 @@ internal class RabbitServer : IRabbitServer
 
     public Task CloseAsync(ushort replyCode, string replyText, bool abort, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return Task.CompletedTask;
     }
 
     public Task CloseAsync(ShutdownEventArgs reason, bool abort, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return Task.CompletedTask;
     }
 
     public async Task<uint> ConsumerCountAsync(string queue, CancellationToken cancellationToken = default)

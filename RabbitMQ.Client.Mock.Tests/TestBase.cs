@@ -53,9 +53,15 @@ public class TestBase
         }
     }
 
-    protected ValueTask<string> CreateUniqueQueueName()
+    protected ValueTask<string> CreateUniqueExchangeNameAsync()
     {
-        var queueName = $"RQ-UnitTest-{Guid.NewGuid().ToString("D")}";
+        var exchangeName = $"RQ-UnitTest-Exchange-{Guid.NewGuid().ToString("D")}";
+        return ValueTask.FromResult(exchangeName);
+    }
+
+    protected ValueTask<string> CreateUniqueQueueNameAsync()
+    {
+        var queueName = $"RQ-UnitTest-Queue-{Guid.NewGuid().ToString("D")}";
         return ValueTask.FromResult(queueName);
     }
 }

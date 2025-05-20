@@ -38,7 +38,7 @@ internal sealed class AsyncAutoResetEvent : IDisposable
         {
             registration = ThreadPool.RegisterWaitForSingleObject(
                 _event,
-                (state, timedOut) => ((TaskCompletionSource<bool>)state!).TrySetResult(!timedOut),
+                (state, timedOut) => ((TaskCompletionSource<bool>)state!).TrySetResult(timedOut),
                 tcs,
                 (int)_timeOut.TotalMilliseconds,
                 executeOnlyOnce: true);

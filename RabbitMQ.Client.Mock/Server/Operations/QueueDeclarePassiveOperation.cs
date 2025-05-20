@@ -24,7 +24,10 @@ internal class QueueDeclarePassiveOperation(IRabbitServer server, string queue) 
                 return ValueTask.FromResult(OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Queue '{queue}' not found."))));
             }
 
-            return ValueTask.FromResult(OperationResult.Success($"Queue '{queue}' exists."));
+            var messageCount = queueInstance.MessageCount;
+            var consumerCount = queueInstance.ConsumerCount;
+            var result = new QueueDeclareOk(queue, messageCount, consumerCount);
+            return ValueTask.FromResult(OperationResult.Success($"Queue '{queue}' exists.", result));
         }
         catch (Exception ex)
         {

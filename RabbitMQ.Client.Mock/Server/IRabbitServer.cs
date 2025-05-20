@@ -71,12 +71,18 @@ internal interface IRabbitServer
 
     Task<uint> ConsumerCountAsync(string queue, CancellationToken cancellationToken = default(CancellationToken));
 
-    void RegisterChannel(int channelNumber, IChannel channel);
-
-    void UnregisterChannel(int channelNumber);
-
     ValueTask<string> GenerateUniqueConsumerTag(string queueName);
 
     ValueTask<ulong> GetNextDeliveryTagForChannel(int channelNumber);
+    #endregion
+
+    #region Connection & Channel Management
+    int RegisterChannel(IChannel channel);
+
+    void UnregisterChannel(int channelNumber);
+
+    int RegisterConnection(IConnection connection);
+
+    void UnregisterConnection(int connectionNumber);
     #endregion
 }

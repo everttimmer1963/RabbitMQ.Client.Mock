@@ -64,18 +64,15 @@ internal class FakeConnectionFactory : IConnectionFactory
 
     public async Task<IConnection> CreateConnectionAsync(CancellationToken cancellationToken = default)
     {
-        if (_connection is null)
+        var options = new FakeConnectionOptions
         {
-            var options = new FakeConnectionOptions
-            {
-                ChannelMax = RequestedChannelMax,
-                ClientProperties = ClientProperties,
-                FrameMax = RequestedFrameMax,
-                Heartbeat = RequestedHeartbeat,
-                ClientProvidedName = ClientProvidedName
-            };
-            _connection = new FakeConnection(options);
-        }
+            ChannelMax = RequestedChannelMax,
+            ClientProperties = ClientProperties,
+            FrameMax = RequestedFrameMax,
+            Heartbeat = RequestedHeartbeat,
+            ClientProvidedName = ClientProvidedName
+        };
+        _connection = new FakeConnection(options);
         return await Task.FromResult<IConnection>(_connection);
     }
 

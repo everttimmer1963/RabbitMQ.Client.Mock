@@ -7,7 +7,7 @@ namespace RabbitMQ.Client.Mock.Server.Operations;
 
 internal class ExchangeBindOperation(IRabbitServer server, string source, string destination, string routingKey, IDictionary<string, object?>? arguments = null) : Operation(server)
 {
-    public override bool IsValid => !(Server is null || string.IsNullOrEmpty(source) || string.IsNullOrEmpty(destination) || string.IsNullOrEmpty(routingKey));
+    public override bool IsValid => !(Server is null);
 
     public override ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -17,6 +17,12 @@ internal class ExchangeBindOperation(IRabbitServer server, string source, string
             if (!IsValid)
             {
                 return ValueTask.FromResult(OperationResult.Failure(new InvalidOperationException("Source, Target and ResourceKey are required.")));
+            }
+
+            // the destination exchange may never be the default exchange so check for that.
+            if(destination == string.Empty)
+            {
+                return ValueTask.FromResult(OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"The default exchange cannot be used as the destination exchange in a binding."))));
             }
 
             // get the source exchange to bind to

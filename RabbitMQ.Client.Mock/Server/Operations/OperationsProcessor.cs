@@ -59,6 +59,7 @@ internal class OperationsProcessor : IDisposable
         }));
 
         // now wait for the operation to complete, be cancelled or time-out.
+        _waitHandle.Set();
         var timedOut = await operationDone.WaitOneAsync(cancellationToken).ConfigureAwait(false);
         if (timedOut)
         {
