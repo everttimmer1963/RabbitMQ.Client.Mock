@@ -21,6 +21,7 @@ Some of the features include:
 - Mimics behaviour when deleting queues and exchanges.
 - Mimics behaviour regarding client named queues, or server named queues.
 - Correct routing of messages, including usage of exchange-to-exchange bindings.
+- Supports Direct, Fanout, Headers & Topic exchanges.
 - Usage of DeadLetter exchanges and queues.
 
 ## Note
