@@ -20,7 +20,7 @@ internal class OperationsProcessor : IDisposable
         if (_isRunning) return;
         _isRunning = true;
 
-        Task.Run(() => ProcessingLoop(_tokenSource.Token));
+        _loopTask = Task.Run(() => ProcessingLoop(_tokenSource.Token));
     }
 
     public void StopProcessing()
