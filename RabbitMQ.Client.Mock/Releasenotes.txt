@@ -1,0 +1,8 @@
+1.2.0	Release (2025-05-21)
+- Changed .NET version from .NET 9.0 to .NET 8.0 for improved compatibility.
+- Complete refactoring of the internal mock server in order to improve unit test isolation.
+- Added support for Fanout, Headers & Topic exchanges (not fully tested yet).
+- Improved compliance to RabbitMQ client behaviour.
+
+1.0.2	Release (2025-05-13)
+- Added support for exchange to exchange bindings.
