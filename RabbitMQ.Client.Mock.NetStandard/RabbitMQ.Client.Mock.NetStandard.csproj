@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <Nullable>enable</Nullable>
     <Version>1.0.2</Version>
     <Authors>Bonensoep1963</Authors>
@@ -9,7 +9,7 @@
     <Copyright>Copyright (c) Bonensoep1963 2025</Copyright>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/everttimmer1963/RabbitMQ.Client.Mock</RepositoryUrl>
-    <PackageTags>RabbitMQ;Mock;UnitTests</PackageTags>
+    <PackageTags>RabbitMQ;Fakes;Mock;UnitTests</PackageTags>
     <PackageReleaseNotes>Initial upload</PackageReleaseNotes>
     <PackageLicenceExpression>GPL-3.0-or-later</PackageLicenceExpression>
     <PackageLicenseFile>licence.txt</PackageLicenseFile>

@@ -7,10 +7,10 @@ namespace RabbitMQ.Client.Mock.NetStandard
 {
     internal struct AsyncEventingWrapper<TEvent> where TEvent : AsyncEventArgs
     {
-        private event AsyncEventHandler<TEvent>? _eventHandler;
-        private Delegate[]? _handlers;
-        private string? _context;
-        private Func<Exception, string, CancellationToken, Task>? _onException;
+        private event AsyncEventHandler<TEvent> _eventHandler;
+        private Delegate[] _handlers;
+        private string _context;
+        private Func<Exception, string, CancellationToken, Task> _onException;
 
         public AsyncEventingWrapper(string context, Func<Exception, string, CancellationToken, Task> onException)
         {
@@ -22,13 +22,13 @@ namespace RabbitMQ.Client.Mock.NetStandard
 
         public bool IsEmpty => _eventHandler is null;
 
-        public void AddHandler(AsyncEventHandler<TEvent>? handler)
+        public void AddHandler(AsyncEventHandler<TEvent> handler)
         {
             _eventHandler += handler;
             _handlers = null;
         }
 
-        public void RemoveHandler(AsyncEventHandler<TEvent>? handler)
+        public void RemoveHandler(AsyncEventHandler<TEvent> handler)
         {
             _eventHandler -= handler;
             _handlers = null;
@@ -37,7 +37,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
         // Do not make this function async! (This type is a struct that gets copied at the start of an async method => empty _handlers is copied)
         public Task InvokeAsync(object sender, TEvent parameter)
         {
-            Delegate[]? handlers = _handlers;
+            Delegate[] handlers = _handlers;
             if (handlers is null)
             {
                 handlers = _eventHandler?.GetInvocationList();
@@ -52,7 +52,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
             return InternalInvoke(handlers, sender, parameter);
         }
 
-        private readonly async Task InternalInvoke(Delegate[] handlers, object sender, TEvent @event)
+        private async Task InternalInvoke(Delegate[] handlers, object sender, TEvent @event)
         {
             foreach (AsyncEventHandler<TEvent> action in handlers)
             {
@@ -65,7 +65,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
                 {
                     if (_onException != null)
                     {
-                        await _onException(exception, _context!, @event.CancellationToken)
+                        await _onException(exception, _context, @event.CancellationToken)
                             .ConfigureAwait(false);
                     }
                     else

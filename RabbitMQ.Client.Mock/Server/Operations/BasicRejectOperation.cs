@@ -17,7 +17,7 @@ internal class BasicRejectOperation(IRabbitServer server, FakeChannel channel, u
             }
 
             // get the message(s) that need to be nacked.
-            var pm = Server.PendingConfirms.Where(pm => pm.Key.Channel == channel.ChannelNumber & pm.Key.DeliveryTag == deliveryTag).Select(pm => pm.Value).FirstOrDefault();
+            var pm = Server.PendingConfirms.Where(pm => pm.Key.Channel == channel.ChannelNumber && pm.Key.DeliveryTag == deliveryTag).Select(pm => pm.Value).FirstOrDefault();
             if (pm is null)
             {
                 return OperationResult.Warning($"No message found for delivery tag {deliveryTag}.");

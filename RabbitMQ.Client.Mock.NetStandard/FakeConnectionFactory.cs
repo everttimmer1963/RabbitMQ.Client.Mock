@@ -26,51 +26,56 @@ namespace RabbitMQ.Client.Mock.NetStandard
         public static readonly IEnumerable<IAuthMechanismFactory> DefaultAuthMechanisms = new[] { new PlainMechanismFactory() };
         public IEnumerable<IAuthMechanismFactory> AuthMechanisms = DefaultAuthMechanisms;
         public static System.Net.Sockets.AddressFamily DefaultAddressFamily;
-        internal static readonly Dictionary<string, object?> DefaultClientProperties = new Dictionary<string, object?>(5)
+        internal static readonly Dictionary<string, object> DefaultClientProperties = new Dictionary<string, object>(7)
         {
             ["product"] = Encoding.UTF8.GetBytes("RabbitMQ"),
-            ["version"] = Encoding.UTF8.GetBytes(typeof(ConnectionFactory).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion),
+            ["version"] = Encoding.UTF8.GetBytes(typeof(ConnectionFactory).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion),
             ["platform"] = Encoding.UTF8.GetBytes(".NET"),
             ["copyright"] = Encoding.UTF8.GetBytes("Copyright (c) 2007-2023 Broadcom."),
-            ["information"] = Encoding.UTF8.GetBytes("Licensed under the MPL. See https://www.rabbitmq.com/")
+            ["information"] = Encoding.UTF8.GetBytes("Licensed under the MPL. See https://www.rabbitmq.com/"),
+            ["capabilities"] = new Dictionary<string, bool>(6)
+            {
+                ["publisher_confirms"] = true,
+                ["exchange_exchange_bindings"] = true,
+                ["basic.nack"] = true,
+                ["consumer_cancel_notify"] = true,
+                ["connection.blocked"] = true,
+                ["authentication_failure_close"] = true
+            },
+            ["connection_name"] = null
         };
 
-        private FakeConnection? _connection;
-
-        public IDictionary<string, object?> ClientProperties { get; set; } = DefaultClientProperties;
+        public IDictionary<string, object> ClientProperties { get; set; } = DefaultClientProperties;
         public string Password { get; set; } = DefaultPass;
         public ushort RequestedChannelMax { get; set; } = DefaultChannelMax;
         public uint RequestedFrameMax { get; set; } = DefaultFrameMax;
         public TimeSpan RequestedHeartbeat { get; set; } = DefaultHeartbeat;
         public string UserName { get; set; } = DefaultUser;
         public string VirtualHost { get; set; } = DefaultVHost;
-        public ICredentialsProvider? CredentialsProvider { get; set; }
+        public ICredentialsProvider CredentialsProvider { get; set; }
         public Uri Uri { get; set; } = new Uri("amqp://localhost:5672");
-        public string? ClientProvidedName { get; set; }
+        public string ClientProvidedName { get; set; }
         public TimeSpan HandshakeContinuationTimeout { get; set; } = DefaultHandshakeContinuationTimeout;
         public TimeSpan ContinuationTimeout { get; set; } = DefaultContinuationTimeout;
         public ushort ConsumerDispatchConcurrency { get; set; } = DefaultConsumerDispatchConcurrency;
 
-        public IAuthMechanismFactory? AuthMechanismFactory(IEnumerable<string> mechanismNames)
+        public IAuthMechanismFactory AuthMechanismFactory(IEnumerable<string> mechanismNames)
         {
             throw new NotImplementedException("Since this is a mocking client. Authentication isn't implemented.");
         }
 
         public async Task<IConnection> CreateConnectionAsync(CancellationToken cancellationToken = default)
         {
-            if (_connection is null)
+            var options = new FakeConnectionOptions
             {
-                var options = new FakeConnectionOptions
-                {
-                    ChannelMax = RequestedChannelMax,
-                    ClientProperties = ClientProperties,
-                    FrameMax = RequestedFrameMax,
-                    Heartbeat = RequestedHeartbeat,
-                    ClientProvidedName = ClientProvidedName
-                };
-                _connection = new FakeConnection(options);
-            }
-            return await Task.FromResult<IConnection>(_connection);
+                ChannelMax = RequestedChannelMax,
+                ClientProperties = ClientProperties,
+                FrameMax = RequestedFrameMax,
+                Heartbeat = RequestedHeartbeat,
+                ClientProvidedName = ClientProvidedName
+            };
+            var connection = new FakeConnection(options);
+            return await Task.FromResult<IConnection>(connection);
         }
 
         public async Task<IConnection> CreateConnectionAsync(string clientProvidedName, CancellationToken cancellationToken = default)
