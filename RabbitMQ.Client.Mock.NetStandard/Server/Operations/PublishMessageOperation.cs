@@ -1,11 +1,25 @@
 ﻿using RabbitMQ.Client.Mock.NetStandard.Server.Data;
-using RabbitMQ.Client.Mock.NetStandard.Server.Exchanges;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RabbitMQ.Client.Mock.NetStandard.Server.Operations
 {
-    internal class PublishMessageOperation(IRabbitServer server, string exchange, string routingKey, RabbitMessage message) : Operation(server)
+    internal class PublishMessageOperation : Operation
     {
-        public override bool IsValid => !(Server is null || string.IsNullOrEmpty(exchange) || string.IsNullOrWhiteSpace(routingKey) || message is null);
+        readonly string _exchange;
+        readonly string _routingKey;
+        readonly RabbitMessage _message;
+
+        public PublishMessageOperation(IRabbitServer server, string exchange, string routingKey, RabbitMessage message)
+            : base(server)
+        {
+            this._exchange = exchange ?? throw new ArgumentNullException(nameof(exchange));
+            this._routingKey = routingKey ?? throw new ArgumentNullException(nameof(routingKey));
+            this._message = message ?? throw new ArgumentNullException(nameof(message));
+        }
+
+        public override bool IsValid => !(Server is null || string.IsNullOrEmpty(_exchange) || string.IsNullOrWhiteSpace(_routingKey) || _message is null);
 
         public override async ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
         {
@@ -19,31 +33,31 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Operations
                 bool published = false;
 
                 // get the exchange to publish to.
-                var exchangeToPublishTo = Server.Exchanges.TryGetValue(exchange, out var x) ? x : null;
+                var exchangeToPublishTo = Server.Exchanges.TryGetValue(_exchange, out var x) ? x : null;
                 if (exchangeToPublishTo is null)
                 {
-                    return OperationResult.Warning($"Exchange '{exchange}' not found.");
+                    return OperationResult.Warning($"Exchange '{_exchange}' not found.");
                 }
 
                 // route the message to any bound exchanges.
-                var exchangeBindings = exchangeToPublishTo.ExchangeBindings.TryGetValue(routingKey, out var b) ? b : null;
-                if (exchangeBindings is not null)
+                var exchangeBindings = exchangeToPublishTo.ExchangeBindings.TryGetValue(_routingKey, out var b) ? b : null;
+                if (exchangeBindings != null)
                 {
                     foreach (var boundExchange in exchangeBindings.BoundExchanges)
                     {
-                        await boundExchange.Value.PublishMessageAsync(routingKey, message).ConfigureAwait(false);
+                        await boundExchange.Value.PublishMessageAsync(_routingKey, _message).ConfigureAwait(false);
                         Console.WriteLine($"{GetType().Name}: Message published to exchange: {boundExchange.Value.Name}");
                         published = true;
                     }
                 }
 
                 // route the message to any bound queues.
-                var queueBindings = exchangeToPublishTo.QueueBindings.TryGetValue(routingKey, out var q) ? q : null;
-                if (queueBindings is not null)
+                var queueBindings = exchangeToPublishTo.QueueBindings.TryGetValue(_routingKey, out var q) ? q : null;
+                if (queueBindings != null)
                 {
                     foreach (var boundQueue in queueBindings.BoundQueues)
                     {
-                        await boundQueue.Value.PublishMessageAsync(message).ConfigureAwait(false);
+                        await boundQueue.Value.PublishMessageAsync(_message).ConfigureAwait(false);
                         Console.WriteLine($"{GetType().Name}: Message published to queue: {boundQueue.Value.Name}");
                         published = true;
                     }
