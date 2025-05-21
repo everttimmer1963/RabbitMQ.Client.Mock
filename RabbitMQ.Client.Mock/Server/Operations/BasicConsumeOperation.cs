@@ -4,7 +4,7 @@ using RabbitMQ.Client.Mock.Server.Bindings;
 
 namespace RabbitMQ.Client.Mock.Server.Operations;
 
-internal class BasicConsumeOperation(IRabbitServer server, string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer) : Operation(server)
+internal class BasicConsumeOperation(IRabbitServer server, IChannel channel, string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer) : Operation(server)
 {
     public override bool IsValid => !(Server is null || string.IsNullOrEmpty(queue) || consumer is null);
 
@@ -46,6 +46,7 @@ internal class BasicConsumeOperation(IRabbitServer server, string queue, bool au
             // now, add the new consumer binding.
             var binding = new ConsumerBinding(queueInstance, consumer)
             {
+                ChannelNumber = channel.ChannelNumber,
                 AutoAcknowledge = autoAck,
                 Arguments = arguments,
                 NoLocal = noLocal,
@@ -53,7 +54,7 @@ internal class BasicConsumeOperation(IRabbitServer server, string queue, bool au
             };
 
             Server.ConsumerBindings.TryAdd(consumerTag, binding);
-            return OperationResult.Success($"Consumer '{consumerTag}' added to queue '{queue}' with autoAck={autoAck}, noLocal={noLocal}, exclusive={exclusive}.", consumer);
+            return OperationResult.Success($"Consumer '{consumerTag}' added to queue '{queue}' with autoAck={autoAck}, noLocal={noLocal}, exclusive={exclusive}.", consumerTag);
         }
         catch (Exception ex)
         {

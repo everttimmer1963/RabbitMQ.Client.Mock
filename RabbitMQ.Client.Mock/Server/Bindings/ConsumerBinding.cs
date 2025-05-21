@@ -5,6 +5,7 @@ namespace RabbitMQ.Client.Mock.Server.Bindings;
 internal class ConsumerBinding(RabbitQueue queue, IAsyncBasicConsumer consumer)
 {
     public RabbitQueue Queue { get; } = queue;
+    public int ChannelNumber { get; set; }
     public bool AutoAcknowledge { get; set; }
     public bool NoLocal { get; set; }
     public bool Exclusive { get; set; }

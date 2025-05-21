@@ -29,7 +29,7 @@ internal interface IRabbitServer
 
     Task BasicCancelAsync(string consumerTag, bool noWait = false, CancellationToken cancellationToken = default(CancellationToken));
 
-    Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default(CancellationToken));
+    Task<string> BasicConsumeAsync(FakeChannel channel, string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default(CancellationToken));
 
     Task<BasicGetResult?> BasicGetAsync(int channelNumber, string queue, bool autoAck, CancellationToken cancellationToken = default(CancellationToken));
 

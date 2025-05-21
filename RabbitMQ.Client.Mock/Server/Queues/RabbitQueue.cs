@@ -8,7 +8,7 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
     private readonly IRabbitServer _server;
     private readonly string _name;
     private readonly ConcurrentLinkedList<RabbitMessage> _queue = new();
-    private readonly AsyncAutoResetEvent _waitHandle = new(true);
+    private readonly AsyncAutoResetEvent _waitHandle = new(false);
     private readonly CancellationTokenSource _tokenSource = new();
 
     public RabbitQueue(IRabbitServer server, string name)
@@ -53,6 +53,20 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
         return (exchange is not null && routingKey is not null);
     }
 
+    public bool TryConsumeMessage(int channelNumber, bool autoAcknowledge, out RabbitMessage? message)
+    {
+        message = _queue.TryRemoveFirst(out var msg) ? msg : null;
+        if (message is null)
+        {
+            return false;
+        }
+        if (autoAcknowledge)
+        {
+            CopyToPendingConfirms(channelNumber, message);
+        }
+        return true;
+    }
+
     public async ValueTask<RabbitMessage?> ConsumeMessageAsync(int channelNumber, bool autoAcknowledge)
     {
         var message = _queue.TryRemoveFirst(out var msg) ? msg : null;
@@ -65,6 +79,12 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
             await CopyToPendingConfirmsAsync(channelNumber, message).ConfigureAwait(false);
         }
         return message;
+    }
+
+    public void CopyToPendingConfirms(int channelNumber, RabbitMessage message)
+    {
+        var pc = new PendingConfirm(channelNumber, message.DeliveryTag, message, TimeSpan.FromMinutes(30));
+        Server.PendingConfirms.TryAdd((channelNumber, message.DeliveryTag), pc);
     }
 
     public ValueTask CopyToPendingConfirmsAsync(int channelNumber, RabbitMessage message)
@@ -82,6 +102,7 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
         }
         message.Queue = Name.ToString();
         _queue.AddLast(message);
+        _waitHandle.Set();
         return ValueTask.CompletedTask;
     }
 
@@ -108,6 +129,9 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
         while (!cancellationToken.IsCancellationRequested)
         { 
             await _waitHandle.WaitOneAsync(cancellationToken).ConfigureAwait(false);
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
             try
             {
                 if (cancellationToken.IsCancellationRequested)
@@ -121,28 +145,34 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
                     continue;
                 }
 
-                // try to extract a message from the queue.
-                // if there are no messages, wait for one to be added.
-                if (!_queue.TryRemoveFirst(out var message))
+                while (_queue.TryRemoveFirst(out var message) && message is not null)
                 {
-                    continue;
+                    // okay, get the bound consumers. we are goind to select one of the consumers randomly,
+                    // and deliver the message to that consumer.
+                    var consumers = Consumers.ToArray();
+                    var chosenIndex = consumers.Length == 0 
+                        ? 0 
+                        : Random.Shared.Next(0, consumers.Length);
+
+                    var binding = consumers[chosenIndex];
+
+                    // add to pending confirms when explicit acknowledgements.
+                    if (!binding.Value.AutoAcknowledge)
+                    { 
+                        await CopyToPendingConfirmsAsync(binding.Value.ChannelNumber, message).ConfigureAwait(false);
+                    }
+
+                    // now, deliver the message to the consumer.
+                    await binding.Value.Consumer.HandleBasicDeliverAsync(
+                        binding.Key,
+                        message!.DeliveryTag,
+                        message.Redelivered,
+                        message.Exchange,
+                        message.RoutingKey,
+                        message.BasicProperties,
+                        message.Body,
+                        cancellationToken);
                 }
-
-                // okay, get the bound consumers. we are goind to select one of the consumers randomly,
-                // and deliver the message to that consumer.
-                var bindings = Consumers.ToArray();
-                var chosenIndex = Random.Shared.Next(0, bindings.Length);
-
-                var binding = bindings[chosenIndex];
-                await binding.Value.Consumer.HandleBasicDeliverAsync(
-                    binding.Key,
-                    message!.DeliveryTag,
-                    message.Redelivered,
-                    message.Exchange,
-                    message.RoutingKey,
-                    message.BasicProperties,
-                    message.Body,
-                    cancellationToken);
             }
             catch(Exception e)
             {

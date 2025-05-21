@@ -15,7 +15,7 @@ internal class MessageCountOperation(IRabbitServer server, string queue) : Opera
             }
 
             // count the number of messages in the queue
-            var count = Convert.ToUInt64(Server.Queues.TryGetValue(queue, out var q) ? q.MessageCount : 0);
+            var count = Convert.ToUInt32(Server.Queues.TryGetValue(queue, out var q) ? q.MessageCount : 0);
 
             return ValueTask.FromResult(OperationResult.Success(result: count));
         }

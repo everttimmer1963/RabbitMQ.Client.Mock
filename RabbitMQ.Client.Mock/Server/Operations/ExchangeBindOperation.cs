@@ -44,7 +44,7 @@ internal class ExchangeBindOperation(IRabbitServer server, string source, string
             if ( binding is null)
             {
                 // create a new binding and add the target exchange
-                binding = new ExchangeBinding { Exchange = targetExchange, Arguments = arguments };
+                binding = new ExchangeBinding { Exchange = sourceExchange, Arguments = arguments };
                 binding.BoundExchanges.Add(destination, targetExchange);
 
                 // finally, add the new binding and return success.

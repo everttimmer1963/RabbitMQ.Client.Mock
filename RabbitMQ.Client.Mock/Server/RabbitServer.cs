@@ -123,11 +123,12 @@ internal class RabbitServer : IRabbitServer
         await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
-    public async Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
+    public async Task<string> BasicConsumeAsync(FakeChannel channel, string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
     {
-        var operation = new BasicConsumeOperation(this, queue, autoAck, consumerTag, noLocal, exclusive, arguments, consumer);
+        var operation = new BasicConsumeOperation(this, channel, queue, autoAck, consumerTag, noLocal, exclusive, arguments, consumer);
         var outcome = await Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
-        return await HandleOperationResult<string>(outcome, operation.OperationId).ConfigureAwait(false);
+        var result = await HandleOperationResult<string>(outcome, operation.OperationId).ConfigureAwait(false);
+        return result ?? string.Empty;
     }
 
     public async Task<BasicGetResult?> BasicGetAsync(int channelNumber, string queue, bool autoAck, CancellationToken cancellationToken = default)
