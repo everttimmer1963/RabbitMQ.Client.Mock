@@ -1,32 +1,33 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Version>1.0.2</Version>
     <Authors>Bonensoep1963</Authors>
     <Description>RabbitMQ.Client mocking library that enables users to mock the behaviour of RabbitMQ in unit tests.</Description>
     <Copyright>Copyright (c) Bonensoep1963 2025</Copyright>
-    <PackageProjectUrl></PackageProjectUrl>
-    <PackageIcon>Rabbit-128.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/everttimmer1963/RabbitMQ.Client.Mock</RepositoryUrl>
     <PackageTags>RabbitMQ;Mock;UnitTests</PackageTags>
-    <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)/ReleaseNotes.txt"))</PackageReleaseNotes>
+    <PackageReleaseNotes>Initial upload</PackageReleaseNotes>
     <PackageLicenceExpression>GPL-3.0-or-later</PackageLicenceExpression>
     <PackageLicenseFile>licence.txt</PackageLicenseFile>
-    <Version>1.2.0</Version>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\licence.txt">
-      <Pack>True</Pack>
+    <Content Include="Rabbit-128.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\licence.txt" Link="licence.txt">
       <PackagePath>\</PackagePath>
+      <Pack>True</Pack>
     </None>
-    <None Include="..\Rabbit-128.png">
-      <Pack>True</Pack>
+    <None Include="..\Rabbit-128.png" Link="Rabbit-128.png">
       <PackagePath>\</PackagePath>
+      <Pack>True</Pack>
     </None>
     <None Include="..\README.md">
       <Pack>True</Pack>

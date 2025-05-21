@@ -1,23 +1,27 @@
 ﻿using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Mock.Server;
 
 namespace RabbitMQ.Client.Mock;
 
 internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 {
+    public const int DefaultRemotePort = 5672;
+
     private static int _lastConnectionNumber;
 
     private bool _disposed;
     private int _connectionNumber;
     private readonly FakeConnectionOptions _options;
     private readonly List<IChannel> _channels = new();
+    private IRabbitServer _server;
 
     public FakeConnection(FakeConnectionOptions options)
     {
         _options = options;
-        _connectionNumber = GetNextConnectionNumber();
+        _server = new RabbitServer();
+        _connectionNumber = _server.RegisterConnection(this);
+        IsOpen = true;
     }
-
-    private RabbitMQServer Server => RabbitMQServer.GetInstance(_connectionNumber);
 
     public ushort ChannelMax => _options.ChannelMax;
 
@@ -37,13 +41,13 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
     public IDictionary<string, object?>? ServerProperties { get; private set; }
 
-    public IEnumerable<ShutdownReportEntry> ShutdownReport => throw new NotImplementedException();
+    public IEnumerable<ShutdownReportEntry> ShutdownReport { get; private set; } = Enumerable.Empty<ShutdownReportEntry>();
 
     public string? ClientProvidedName => _options.ClientProvidedName;
 
     public int LocalPort { get; set; }
 
-    public int RemotePort { get; set; }
+    public int RemotePort { get; set; } = DefaultRemotePort;
 
     public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
     { 
@@ -73,19 +77,14 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
     public Task<IChannel> CreateChannelAsync(CreateChannelOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var channel = new FakeChannel(options, _connectionNumber);
+        var channel = new FakeChannel(_server, options, _connectionNumber);
         _channels.Add(channel);
         return Task.FromResult<IChannel>(channel);
     }
 
     public Task UpdateSecretAsync(string newSecret, string reason, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
-    }
-
-    private static int GetNextConnectionNumber()
-    {
-        return Interlocked.Increment(ref _lastConnectionNumber);
+        return Task.CompletedTask;
     }
 
     public void Dispose()
@@ -105,6 +104,5 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
         }
 
         _channels.Clear();
-        await Server.HandleDisconnectAsync(_connectionNumber);
     }
 }

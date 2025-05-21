@@ -1,0 +1,499 @@
+﻿using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
+using RabbitMQ.Client.Mock.NetStandard.Domain;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace RabbitMQ.Client.Mock.NetStandard
+{
+    internal class RabbitMQServer
+    {
+        private static ConcurrentDictionary<int, RabbitMQServer> _instances = new ConcurrentDictionary<int, RabbitMQServer>();
+
+        private static RabbitMQServer? _instance;
+        private int _lastPublishSequenceNumber = 1;
+        private SemaphoreSlim _deliveryTagsSemaphore = new SemaphoreSlim(1, 1);
+        private SemaphoreSlim _operationSemaphore = new SemaphoreSlim(1, 1);
+        private SemaphoreSlim _disposeSemaphore = new SemaphoreSlim(1, 1);
+
+        private IDictionary<string, Exchange> Exchanges { get; } = new ConcurrentDictionary<string, Exchange>();
+
+        private IDictionary<string, RabbitQueue> Queues { get; } = new ConcurrentDictionary<string, RabbitQueue>();
+
+        private IDictionary<int, IChannel> Channels { get; } = new ConcurrentDictionary<int, IChannel>();
+
+        private IDictionary<string, IAsyncBasicConsumer> Consumers { get; } = new ConcurrentDictionary<string, IAsyncBasicConsumer>();
+
+        private IDictionary<ulong, IList<string>> PendingMessageBindings { get; } = new ConcurrentDictionary<ulong, IList<string>>();
+
+        private IDictionary<string, IList<string>> ConsumerBindings { get; } = new ConcurrentDictionary<string, IList<string>>();
+
+        private IDictionary<int, ulong> ChannelDeliveryTags { get; } = new ConcurrentDictionary<int, ulong>();
+
+        public static RabbitMQServer GetInstance(int connectionNumber)
+        {
+            return _instances.GetOrAdd(connectionNumber, _ => new RabbitMQServer());
+        }
+
+        internal async ValueTask<ulong> GetNextDeliveryTagAsync(int channelNumber)
+        {
+            await _deliveryTagsSemaphore.WaitAsync();
+            try
+            {
+                if (ChannelDeliveryTags.TryGetValue(channelNumber, out var deliveryTag))
+                {
+                    deliveryTag++;
+                    ChannelDeliveryTags[channelNumber] = deliveryTag;
+                    return deliveryTag;
+                }
+                ChannelDeliveryTags.Add(channelNumber, 1);
+                return 1;
+            }
+            finally
+            {
+                _deliveryTagsSemaphore.Release();
+            }
+        }
+
+        internal ValueTask<int> GetNextPublishSequenceNumber()
+        {
+            return new ValueTask<int>(Interlocked.Increment(ref _lastPublishSequenceNumber));
+        }
+
+        internal ValueTask<RabbitQueue?> GetQueueAsync(string queue)
+        {
+            return new ValueTask<RabbitQueue?>(Queues.TryGetValue(queue, out var result) ? result : null);
+        }
+
+        internal async ValueTask<uint> QueueDeleteAsync(string queue, bool ifUnUsed, bool ifEmpty)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                var queueInstance = Queues.TryGetValue(queue, out var result) ? result : null;
+                if (queueInstance is null)
+                {
+                    throw new ArgumentException($"Queue {queue} not found.");
+                }
+                if (ifUnUsed && await queueInstance.ConsumerCountAsync() > 0)
+                {
+                    throw new ArgumentException($"Queue {queue} is in use.");
+                }
+                if (ifEmpty && await queueInstance.CountAsync() > 0)
+                {
+                    throw new ArgumentException($"Queue {queue} is not empty.");
+                }
+
+                // remove the queus from the server
+                Queues.Remove(queue);
+
+                // let all exchanges know that the queue has been deleted,
+                // so they can remove bindings to the queue, if any.
+                Exchanges.Values
+                    .Where(xchg => xchg.HasBindings)
+                    .ToList()
+                    .ForEach(xchg => xchg.HandleQueueDeleted(queue));
+
+                // get the current count of messages in the queue for reporting purposes.
+                var msgCount = await queueInstance.CountAsync();
+
+                // dispose the queue.
+                await queueInstance.DisposeAsync();
+
+                return msgCount;
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+
+        internal async ValueTask<QueueDeclareOk> QueueDeclarePassiveAsync(string queue)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                var queueInstance = Queues.TryGetValue(queue, out var result) ? result : null;
+                if (queueInstance is null)
+                {
+                    throw new ArgumentException($"Queue {queue} not found.");
+                }
+                var consumerCount = await queueInstance.ConsumerCountAsync();
+                var messageCount = await queueInstance.CountAsync();
+                return new QueueDeclareOk(queue, messageCount, (uint)consumerCount);
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+
+        internal async ValueTask<QueueDeclareOk> QueueDeclareAsync(int connectionNumber, string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                var serverGeneratedName = false;
+
+                // if an empty string is passed in for queue name, the server creates a name.
+                // this is only valid for classic queues
+                if (queue == string.Empty)
+                {
+                    // check if this ia a classic queue. if not, throw an exception.
+                    var isClassicQueue = await ConfirmQueueType("classic", arguments);
+                    if (!isClassicQueue)
+                    {
+                        var reason = new ShutdownEventArgs(ShutdownInitiator.Peer, 406, "Queue name cannot be null or empty for non-classic queues.");
+                        throw new OperationInterruptedException(reason);
+                    }
+
+                    // assign a server generated name to the queue.
+                    queue = $"sgq.{Guid.NewGuid().ToString("N")}";
+                    serverGeneratedName = true;
+                }
+
+                // chekc if the queue exists. if it does, report the message and consuemr count.
+                if (Queues.ContainsKey(queue))
+                {
+                    var queueInstance = Queues.TryGetValue(queue, out var result) ? result : null;
+                    if (queueInstance is null)
+                    {
+                        throw new ArgumentException($"Queue {queue} not found.");
+                    }
+                    var consumerCount = await queueInstance.ConsumerCountAsync();
+                    var messageCount = await queueInstance.CountAsync();
+                    return new QueueDeclareOk(queue, messageCount, (uint)consumerCount);
+                }
+
+                // create a new queue and report back.
+                var newQueue = new RabbitQueue(queue, serverGeneratedName, connectionNumber)
+                {
+                    IsDurable = durable,
+                    IsExclusive = exclusive,
+                    AutoDelete = autoDelete,
+                    Connection = connectionNumber
+                };
+                if (arguments != null && arguments.Count > 0)
+                {
+                    arguments.ToList().ForEach(newQueue.Arguments.Add);
+                }
+                Queues.Add(queue, newQueue);
+                return new QueueDeclareOk(queue, 0, 0);
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+
+        internal ValueTask<Exchange?> GetExchangeAsync(string exchange)
+        {
+            return new ValueTask<Exchange?>(Exchanges.TryGetValue(exchange, out var result) ? result : null);
+        }
+
+        internal async ValueTask<bool> ExchangeDeleteAsync(string exchange, bool ifUnused = false)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                var exchangeInstance = Exchanges.TryGetValue(exchange, out var result) ? result : null;
+                if (exchangeInstance is null)
+                {
+                    throw new ArgumentException($"Exchange {exchange} not found.");
+                }
+
+                // if the exchange has bound quues, and ifUnused is true, we cannot delete it.
+                if (ifUnused && exchangeInstance.HasBindings)
+                {
+                    return false;
+                }
+
+                // okay, now we delete the exchange.
+                await ExchangeDeleteAsync(exchangeInstance);
+
+                // the exchange has been deleted. now we need to remove the exchange from
+                // all exchange bindings that have the deleted exchange as destination.
+                Exchanges.Values
+                    .ToList()
+                    .ForEach(xchg => xchg.HandleExchangeDeleted(exchange));
+
+                // finally we need to remove all exchanges and queues that are bound to this exchange.
+                await exchangeInstance.RemoveAllBindings();
+
+                return true;
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+
+        internal ValueTask<bool> ExchangeDeleteAsync(Exchange exchange)
+        {
+            if (Exchanges.ContainsKey(exchange.Name))
+            {
+                return new ValueTask<bool>(Exchanges.Remove(exchange.Name));
+            }
+            return new ValueTask<bool>(false);
+        }
+
+        internal async ValueTask ExchangeDeclareAsync(int connectionNumber, string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                if (Exchanges.ContainsKey(exchange))
+                {
+                    return;
+                }
+                var newExchange = type switch
+                {
+                    "direct" => new DirectExchange(exchange, connectionNumber),
+                    _ => throw new ArgumentException($"Exchange type {type} is not supported.")
+                };
+                newExchange.IsDurable = durable;
+                newExchange.AutoDelete = autoDelete;
+                if (arguments != null && arguments.Count > 0)
+                {
+                    arguments.ToList().ForEach(newExchange.Arguments.Add);
+                }
+                Exchanges.Add(exchange, newExchange);
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+
+        internal ValueTask<bool> AddConsumerBindingAsync(string consumerTag, string queue)
+        {
+            var bindings = ConsumerBindings.TryGetValue(consumerTag, out var result) ? result : null;
+            if (bindings != null)
+            {
+                bindings.Add(queue);
+                return new ValueTask<bool>(true);
+            }
+            bindings = new List<string> { queue };
+            return new ValueTask<bool>(ConsumerBindings.TryAdd(consumerTag, bindings));
+        }
+
+        internal ValueTask<bool> RemoveConsumerBindingAsync(string consumerTag, string queue)
+        {
+            var bindings = ConsumerBindings.TryGetValue(consumerTag, out var result) ? result : null;
+            if (bindings != null)
+            {
+                return new ValueTask<bool>(bindings.Remove(queue));
+            }
+            return new ValueTask<bool>(false);
+        }
+
+        internal async ValueTask<string> RegisterConsumerAsync(string consumerTag, string queue, bool autoAck, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                var queueInstance = await GetQueueAsync(queue);
+                if (queueInstance is null)
+                {
+                    throw new ArgumentException($"Queue {queue} does not exist.");
+                }
+                if (consumerTag == string.Empty)
+                {
+                    consumerTag = $"consumer-{queue.ToLowerInvariant()}-{Guid.NewGuid().ToString("D")}";
+                }
+                Consumers.TryAdd(consumerTag, consumer);
+                await queueInstance.AddConsumerAsync(consumerTag, autoAck, arguments);
+                return consumerTag;
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+        internal async ValueTask<IAsyncBasicConsumer?> UnregisterConsumerAsync(string consumerTag)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                var bindings = ConsumerBindings.TryGetValue(consumerTag, out var result)
+                    ? result.ToArray()
+                    : null;
+
+                if (bindings is null)
+                {
+                    throw new ArgumentException($"Consumer {consumerTag} not found.");
+                }
+
+                foreach (var binding in bindings)
+                {
+                    var queueInstance = Queues.TryGetValue(binding, out var queue) ? queue : null;
+                    if (queueInstance is null)
+                    {
+                        continue;
+                    }
+                    await queueInstance.RemoveConsumerAsync(consumerTag);
+                }
+                Consumers.Remove(consumerTag, out var consumer);
+                return consumer;
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+
+        internal ValueTask<IAsyncBasicConsumer> GetConsumerAsync(string consumerTag)
+        {
+            return new ValueTask<IAsyncBasicConsumer>(Consumers.TryGetValue(consumerTag, out var result) ? result : throw new ArgumentException($"Consumer {consumerTag} was not found."));
+        }
+
+        internal ValueTask<bool> AddPendingMessageBindingAsync(ulong deliveryTag, string queue)
+        {
+            var bindings = PendingMessageBindings.TryGetValue(deliveryTag, out var result) ? result : null;
+            if (bindings != null)
+            {
+                bindings.Add(queue);
+                return new ValueTask<bool>(true);
+            }
+
+            bindings = new List<string> { queue };
+            PendingMessageBindings.Add(deliveryTag, bindings);
+            return new ValueTask<bool>(true);
+        }
+
+        internal ValueTask<bool> RemovePendingMessageBindingAsync(ulong deliveryTag, string queue)
+        {
+            var queues = PendingMessageBindings.TryGetValue(deliveryTag, out var result) ? result : null;
+            if (queues != null)
+            {
+                return new ValueTask<bool>(queues.Remove(queue));
+            }
+            return new ValueTask<bool>(false);
+        }
+
+        internal async ValueTask<bool> ConfirmMessageAsync(ulong deliveryTag)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                var queues = PendingMessageBindings.TryGetValue(deliveryTag, out var result) ? result.ToArray() : null;
+                if (queues is null)
+                {
+                    return false;
+                }
+
+                var confirmed = false;
+                foreach (var queue in queues)
+                {
+                    var queueInstance = await GetQueueAsync(queue);
+                    if (queueInstance is null)
+                    {
+                        continue;
+                    }
+
+                    if (await queueInstance.ConfirmMessageAsync(deliveryTag))
+                    {
+                        confirmed = true;
+                    }
+                }
+                return confirmed;
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+
+        internal async ValueTask<bool> RejectMessageAsync(ulong deliveryTag, bool multiple, bool requeue)
+        {
+            await _operationSemaphore.WaitAsync();
+            try
+            {
+                var queues = PendingMessageBindings.TryGetValue(deliveryTag, out var result) ? result : null;
+                if (queues is null)
+                {
+                    throw new ArgumentException($"Message with delivery tag {deliveryTag} could not be found.");
+                }
+                foreach (var queue in queues.ToArray())
+                {
+                    var queueInstance = await GetQueueAsync(queue);
+                    if (queueInstance is null)
+                    {
+                        continue;
+                    }
+                    await queueInstance.RejectMessageAsync(deliveryTag, multiple, requeue);
+                }
+                return true;
+            }
+            finally
+            {
+                _operationSemaphore.Release();
+            }
+        }
+
+        internal async ValueTask<bool> SendToDeadLetterQueueIfExists(RabbitQueue origin, RabbitMessage message)
+        {
+            if (origin.Arguments is null || origin.Arguments.Count == 0)
+            {
+                return false;
+            }
+            var dlExchange = origin.Arguments.TryGetValue("x-dead-letter-exchange", out var xchg) ? (string)xchg! : string.Empty;
+            var dlRoutingKey = origin.Arguments.TryGetValue("x-dead-letter-routing-key", out var rkey) ? (string)rkey! : message.RoutingKey;
+
+            var exchangeInstance = Exchanges.TryGetValue(dlExchange, out var exchange) ? exchange : null;
+            if (exchangeInstance is null)
+            {
+                throw new ArgumentException($"Dead letter exchange {dlExchange} not found.");
+            }
+            var dlQueues = await exchangeInstance.GetBoundQueuesAsync(dlRoutingKey);
+            if (dlQueues == null || dlQueues.Count == 0)
+            {
+                throw new ArgumentException($"No queues or bindings found for bindingkey {dlRoutingKey}.");
+            }
+
+            foreach (var queue in dlQueues)
+            {
+                await queue.PublishMessageAsync(message);
+            }
+            return true;
+        }
+
+        private ValueTask<bool> ConfirmQueueType(string expectedType, IDictionary<string, object?>? arguments)
+        {
+            var type = (arguments is null)
+                ? "classic"
+                : arguments.TryGetValue("x-queue-type", out var result)
+                    ? result?.ToString()?.ToLowerInvariant() ?? "classic"
+                    : "classic";
+
+            return type.Equals(expectedType, StringComparison.OrdinalIgnoreCase)
+                ? new ValueTask<bool>(true)
+                : new ValueTask<bool>(false);
+        }
+
+        internal async ValueTask HandleDisconnectAsync(int connectionNumber)
+        {
+            await _disposeSemaphore.WaitAsync();
+            try
+            {
+                // queues that are exclusive are deleted when the connection that created them is closed.
+                var exclusiveQueues = Queues.Values
+                    .Where(queue => queue.IsExclusive && queue.Connection == connectionNumber)
+                    .ToList();
+
+                foreach (var queue in exclusiveQueues)
+                {
+                    await QueueDeleteAsync(queue.Name, false, false);
+                }
+            }
+            finally
+            {
+                _disposeSemaphore.Release();
+            }
+        }
+    }
+}

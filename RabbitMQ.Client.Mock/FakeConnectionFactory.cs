@@ -1,5 +1,4 @@
-﻿using RabbitMQ.Client.Mock.Domain;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Security.Authentication;
 using System.Text;
 
@@ -23,13 +22,23 @@ internal class FakeConnectionFactory : IConnectionFactory
     public static readonly IEnumerable<IAuthMechanismFactory> DefaultAuthMechanisms = new[] { new PlainMechanismFactory() };
     public IEnumerable<IAuthMechanismFactory> AuthMechanisms = DefaultAuthMechanisms;
     public static System.Net.Sockets.AddressFamily DefaultAddressFamily;
-    internal static readonly Dictionary<string, object?> DefaultClientProperties = new Dictionary<string, object?>(5)
+    internal static readonly Dictionary<string, object?> DefaultClientProperties = new Dictionary<string, object?>(7)
     {
         ["product"] = Encoding.UTF8.GetBytes("RabbitMQ"),
         ["version"] = Encoding.UTF8.GetBytes(typeof(ConnectionFactory).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion),
         ["platform"] = Encoding.UTF8.GetBytes(".NET"),
         ["copyright"] = Encoding.UTF8.GetBytes("Copyright (c) 2007-2023 Broadcom."),
-        ["information"] = Encoding.UTF8.GetBytes("Licensed under the MPL. See https://www.rabbitmq.com/")
+        ["information"] = Encoding.UTF8.GetBytes("Licensed under the MPL. See https://www.rabbitmq.com/"),
+        ["capabilities"] = new Dictionary<string, bool>(6)
+        {
+            ["publisher_confirms"] = true,
+            ["exchange_exchange_bindings"] = true,
+            ["basic.nack"] = true,
+            ["consumer_cancel_notify"] = true,
+            ["connection.blocked"] = true,
+            ["authentication_failure_close"] = true
+        },
+        ["connection_name"] = null
     };
 
     private FakeConnection? _connection;
@@ -55,18 +64,15 @@ internal class FakeConnectionFactory : IConnectionFactory
 
     public async Task<IConnection> CreateConnectionAsync(CancellationToken cancellationToken = default)
     {
-        if (_connection is null)
+        var options = new FakeConnectionOptions
         {
-            var options = new FakeConnectionOptions
-            {
-                ChannelMax = RequestedChannelMax,
-                ClientProperties = ClientProperties,
-                FrameMax = RequestedFrameMax,
-                Heartbeat = RequestedHeartbeat,
-                ClientProvidedName = ClientProvidedName
-            };
-            _connection = new FakeConnection(options);
-        }
+            ChannelMax = RequestedChannelMax,
+            ClientProperties = ClientProperties,
+            FrameMax = RequestedFrameMax,
+            Heartbeat = RequestedHeartbeat,
+            ClientProvidedName = ClientProvidedName
+        };
+        _connection = new FakeConnection(options);
         return await Task.FromResult<IConnection>(_connection);
     }
 

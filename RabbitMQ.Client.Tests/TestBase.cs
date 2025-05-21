@@ -11,32 +11,14 @@ public class TestBase
         ConfigureFactory(this.factory);
     }
 
-    protected async ValueTask<QueueDeclareOk> QueueDeclareAndBindAsync(
-                            IChannel channel,
-                            string queue = "",
-                            string exchange = "",
-                            string bindingKey = "",
-                            bool durable = false,
-                            bool exclusive = true,
-                            bool autoDelete = true,
-                            IDictionary<string, object?>? arguments = null,
-                            bool passive = false,
-                            bool nowait = false,
-                            CancellationToken cancellationToken = default)
-    {
-        // first check requirements
-        ArgumentNullException.ThrowIfNull(channel);
-
-        // declare the queue
-        var result = await channel.QueueDeclareAsync(queue, durable, exclusive, autoDelete, arguments, passive, nowait, cancellationToken);
-
-        // if an exchange has been specified, bind the queue to it.
-        if (!string.IsNullOrWhiteSpace(exchange))
+    protected ValueTask<IList<string>> CreateTestMessagesAsync(int count)
+    { 
+        var list = new List<string>(count);
+        for (var i = 0; i < count; i++)
         {
-            await channel.QueueBindAsync(result.QueueName, exchange, bindingKey, arguments, nowait, cancellationToken);
+            list.Add($"Hello world! This is test message nr {i}.");
         }
-
-        return result;
+        return ValueTask.FromResult<IList<string>>(list);
     }
 
     protected void ConfigureFactory(IConnectionFactory factory)
@@ -53,9 +35,15 @@ public class TestBase
         }
     }
 
-    protected ValueTask<string> CreateUniqueQueueName()
+    protected ValueTask<string> CreateUniqueExchangeNameAsync()
     {
-        var queueName = $"RQ-UnitTest-{Guid.NewGuid().ToString("D")}";
+        var exchangeName = $"RQ-UnitTest-Exchange-{Guid.NewGuid().ToString("D")}";
+        return ValueTask.FromResult(exchangeName);
+    }
+
+    protected ValueTask<string> CreateUniqueQueueNameAsync()
+    {
+        var queueName = $"RQ-UnitTest-Queue-{Guid.NewGuid().ToString("D")}";
         return ValueTask.FromResult(queueName);
     }
 }
