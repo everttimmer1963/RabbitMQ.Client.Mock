@@ -14,7 +14,7 @@ internal class ConsumerCountOperation(IRabbitServer server, string queue) : Oper
             }
 
             // count the number of consumers for the queue.
-            ulong count = Convert.ToUInt64(Server.Queues.TryGetValue(queue, out var q) ? q.ConsumerCount : 0);
+            uint count = Convert.ToUInt32(Server.Queues.TryGetValue(queue, out var q) ? q.ConsumerCount : 0);
 
             return ValueTask.FromResult(OperationResult.Success(result: count));
         }
