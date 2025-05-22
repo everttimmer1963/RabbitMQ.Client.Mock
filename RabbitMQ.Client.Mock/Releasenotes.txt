@@ -1,3 +1,6 @@
+1.2.1	Release (2025-05-22)
+- Fixed a bug in BasicRejectOperation with a wrong comparison being made. (logical AND instead)
+
 1.2.0	Release (2025-05-21)
 - Changed .NET version from .NET 9.0 to .NET 8.0 for improved compatibility.
 - Complete refactoring of the internal mock server in order to improve unit test isolation.
