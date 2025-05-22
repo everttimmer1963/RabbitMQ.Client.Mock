@@ -4,7 +4,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
 {
     public static class RabbitMQMocker
     {
-        private static FakeConnectionFactory? _connectionFactory;
+        private static FakeConnectionFactory _connectionFactory;
 
         /// <summary>
         /// Creates the main entry point for the mocking client. From this factory, we can create connections,

@@ -1,15 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
-    <Nullable>enable</Nullable>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <Version>1.0.2</Version>
     <Authors>Bonensoep1963</Authors>
     <Description>RabbitMQ.Client mocking library that enables users to mock the behaviour of RabbitMQ in unit tests.</Description>
     <Copyright>Copyright (c) Bonensoep1963 2025</Copyright>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/everttimmer1963/RabbitMQ.Client.Mock</RepositoryUrl>
-    <PackageTags>RabbitMQ;Mock;UnitTests</PackageTags>
+    <PackageTags>RabbitMQ;Fakes;Mock;UnitTests</PackageTags>
     <PackageReleaseNotes>Initial upload</PackageReleaseNotes>
     <PackageLicenceExpression>GPL-3.0-or-later</PackageLicenceExpression>
     <PackageLicenseFile>licence.txt</PackageLicenseFile>
@@ -17,15 +16,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Rabbit-128.png" />
+    <Content Include="..\Rabbit-128.ico" Link="Rabbit-128.ico" />
+    <Content Include="..\Rabbit-128.png" Link="Rabbit-128.png" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\licence.txt" Link="licence.txt">
-      <PackagePath>\</PackagePath>
-      <Pack>True</Pack>
-    </None>
-    <None Include="..\Rabbit-128.png" Link="Rabbit-128.png">
       <PackagePath>\</PackagePath>
       <Pack>True</Pack>
     </None>

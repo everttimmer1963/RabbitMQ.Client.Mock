@@ -1,17 +1,21 @@
-﻿using System.Threading.Tasks;
+﻿using System;
 using System.Threading;
-using System;
+using System.Threading.Tasks;
 
-namespace RabbitMQ.Client.Mock.NetStandard.Domain
+namespace RabbitMQ.Client.Mock.NetStandard.Server
 {
     internal sealed class AsyncAutoResetEvent : IDisposable
     {
         private readonly AutoResetEvent _event;
         private volatile bool _disposed;
+        private readonly TimeSpan _timeOut;
 
-        public AsyncAutoResetEvent(bool initialState = false)
+        public AsyncAutoResetEvent(bool initialState = false, TimeSpan timeOut = default)
         {
             _event = new AutoResetEvent(initialState);
+            _timeOut = (timeOut == default)
+                ? TimeSpan.FromSeconds(30)
+                : timeOut;
         }
 
         public void Set()
@@ -31,16 +35,16 @@ namespace RabbitMQ.Client.Mock.NetStandard.Domain
                 return true;
 
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            RegisteredWaitHandle? registration = null;
+            RegisteredWaitHandle registration = null;
             CancellationTokenRegistration ctr = default;
 
             try
             {
                 registration = ThreadPool.RegisterWaitForSingleObject(
                     _event,
-                    (state, timedOut) => ((TaskCompletionSource<bool>)state!).TrySetResult(!timedOut),
+                    (state, timedOut) => ((TaskCompletionSource<bool>)state).TrySetResult(timedOut),
                     tcs,
-                    Timeout.Infinite,
+                    (int)_timeOut.TotalMilliseconds,
                     executeOnlyOnce: true);
 
                 if (cancellationToken.CanBeCanceled)

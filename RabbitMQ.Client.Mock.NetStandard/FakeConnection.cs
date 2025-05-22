@@ -3,31 +3,36 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using System;
+using System.Linq;
+using RabbitMQ.Client.Mock.NetStandard.Server;
 
 namespace RabbitMQ.Client.Mock.NetStandard
 {
     internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
     {
+        public const int DefaultRemotePort = 5672;
+
         private static int _lastConnectionNumber;
 
         private bool _disposed;
         private int _connectionNumber;
         private readonly FakeConnectionOptions _options;
         private readonly List<IChannel> _channels = new List<IChannel>();
+        private IRabbitServer _server;
 
         public FakeConnection(FakeConnectionOptions options)
         {
             _options = options;
-            _connectionNumber = GetNextConnectionNumber();
+            _server = new RabbitServer();
+            _connectionNumber = _server.RegisterConnection(this);
+            IsOpen = true;
         }
-
-        private RabbitMQServer Server => RabbitMQServer.GetInstance(_connectionNumber);
 
         public ushort ChannelMax => _options.ChannelMax;
 
-        public IDictionary<string, object?> ClientProperties => _options.ClientProperties;
+        public IDictionary<string, object> ClientProperties => _options.ClientProperties;
 
-        public ShutdownEventArgs? CloseReason { get; private set; }
+        public ShutdownEventArgs CloseReason { get; private set; }
 
         public AmqpTcpEndpoint Endpoint { get; private set; }
 
@@ -39,15 +44,15 @@ namespace RabbitMQ.Client.Mock.NetStandard
 
         public IProtocol Protocol { get; private set; }
 
-        public IDictionary<string, object?>? ServerProperties { get; private set; }
+        public IDictionary<string, object> ServerProperties { get; private set; }
 
-        public IEnumerable<ShutdownReportEntry> ShutdownReport => throw new NotImplementedException();
+        public IEnumerable<ShutdownReportEntry> ShutdownReport { get; private set; } = Enumerable.Empty<ShutdownReportEntry>();
 
-        public string? ClientProvidedName => _options.ClientProvidedName;
+        public string ClientProvidedName => _options.ClientProvidedName;
 
         public int LocalPort { get; set; }
 
-        public int RemotePort { get; set; }
+        public int RemotePort { get; set; } = DefaultRemotePort;
 
         public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
         {
@@ -75,21 +80,16 @@ namespace RabbitMQ.Client.Mock.NetStandard
             return Task.CompletedTask;
         }
 
-        public Task<IChannel> CreateChannelAsync(CreateChannelOptions? options = null, CancellationToken cancellationToken = default)
+        public Task<IChannel> CreateChannelAsync(CreateChannelOptions options = null, CancellationToken cancellationToken = default)
         {
-            var channel = new FakeChannel(options, _connectionNumber);
+            var channel = new FakeChannel(_server, options, _connectionNumber);
             _channels.Add(channel);
             return Task.FromResult<IChannel>(channel);
         }
 
         public Task UpdateSecretAsync(string newSecret, string reason, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
-        }
-
-        private static int GetNextConnectionNumber()
-        {
-            return Interlocked.Increment(ref _lastConnectionNumber);
+            return Task.CompletedTask;
         }
 
         public void Dispose()
@@ -109,7 +109,6 @@ namespace RabbitMQ.Client.Mock.NetStandard
             }
 
             _channels.Clear();
-            await Server.HandleDisconnectAsync(_connectionNumber);
         }
     }
 }
