@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Mock.Server;
+using System.Diagnostics.CodeAnalysis;
 
 namespace RabbitMQ.Client.Mock;
 internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
@@ -111,6 +112,7 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
         await Server.BasicPublishAsync(this, exchange, routingKey, mandatory, basicProperties, body, cancellationToken).ConfigureAwait(false);
     }
 
+    [ExcludeFromCodeCoverage]
     public async ValueTask BasicPublishAsync<TProperties>(CachedString exchange, CachedString routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default) where TProperties : IReadOnlyBasicProperties, IAmqpHeader
     {
         await BasicPublishAsync(exchange.Value, routingKey.Value, mandatory, basicProperties, body, cancellationToken).ConfigureAwait(false);
