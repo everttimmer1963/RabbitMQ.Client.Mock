@@ -159,6 +159,7 @@ internal class RabbitServer : IRabbitServer
         await BasicPublishAsync(channel, exchange.Value, routingKey.Value, mandatory, basicProperties, body, cancellationToken).ConfigureAwait(false);
     }
 
+    [ExcludeFromCodeCoverage]
     public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken = default)
     {
         // do nothing. we cannot throw an exception here, because the client will not expect it.
