@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Mock.Server;
+using System.Diagnostics.CodeAnalysis;
 
 namespace RabbitMQ.Client.Mock;
 
@@ -49,11 +50,13 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
     public int RemotePort { get; set; } = DefaultRemotePort;
 
+    [ExcludeFromCodeCoverage]
     public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
     { 
         add => throw new NotImplementedException();
         remove => throw new NotImplementedException();
     }
+    [ExcludeFromCodeCoverage]
     public event AsyncEventHandler<ShutdownEventArgs> ConnectionShutdownAsync
     {
         add => throw new NotImplementedException();
@@ -82,6 +85,7 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
         return Task.FromResult<IChannel>(channel);
     }
 
+    [ExcludeFromCodeCoverage]
     public Task UpdateSecretAsync(string newSecret, string reason, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
@@ -89,20 +93,15 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
 
     public void Dispose()
     {
-        if (_disposed)
-        {
-            return;
-        }
-        Task.Run(async () => await DisposeAsync());
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
+        if (_disposed) { return; }
+        _disposed = true;
 
         _channels.Clear();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 }
