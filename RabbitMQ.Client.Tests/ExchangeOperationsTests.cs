@@ -89,7 +89,7 @@ public class ExchangeOperationsTests : TestBase
     }
 
     [Fact]
-    public async Task When_Declaring_Fanout_Exchange_And_Publishing_Message_To_Exchange_Then_Message_Is_Published_To_All_BoundQueues_Regarless_Of_RoutingKey()
+    public async Task When_Declaring_Fanout_Exchange_And_Publishing_Message_To_Exchange_Then_Message_Is_Published_To_All_BoundQueues_Regardless_Of_RoutingKey()
     {
         // Arrange
         var exchangeName = await CreateUniqueExchangeNameAsync();
