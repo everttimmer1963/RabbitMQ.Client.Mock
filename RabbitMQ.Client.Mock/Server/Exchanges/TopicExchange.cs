@@ -1,6 +1,8 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Client.Mock.Server.Data;
+using RabbitMQ.Client.Mock.Server.Operations;
+using RabbitMQ.Client.Mock.Server.Queues;
 
 namespace RabbitMQ.Client.Mock.Server.Exchanges;
 internal class TopicExchange(IRabbitServer server, string name) : RabbitExchange(server, name, ExchangeType.Topic)
@@ -58,6 +60,11 @@ internal class TopicExchange(IRabbitServer server, string name) : RabbitExchange
         }
     }
 
+    public override ValueTask<OperationResult> QueueBindAsync(RabbitQueue queue, IDictionary<string, object?>? arguments = null, string? routingKey = null)
+    {
+        return base.QueueBindAsync(queue, arguments, routingKey);
+    }
+
     private bool IsTopicMatch(string bindingKey, string routingKey)
     {
         // split the binding key and routing key into parts
@@ -70,8 +77,8 @@ internal class TopicExchange(IRabbitServer server, string name) : RabbitExchange
             return false;
         }
 
-        // now check all topics
-        var topicMatch = false;
+        // now check all topics. topicMatch is true by default
+        var topicMatch = true;
         for (int index = 0; index < routingParts.Length; index++)
         {
             // if the binding part is a wildcard, continue.
@@ -80,10 +87,7 @@ internal class TopicExchange(IRabbitServer server, string name) : RabbitExchange
                 continue;
             }
 
-            if (!string.IsNullOrWhiteSpace(routingParts[index]) && routingParts[index].Equals(bindingParts[index], StringComparison.OrdinalIgnoreCase))
-            {
-                topicMatch = true;
-            }
+            topicMatch &= (!string.IsNullOrWhiteSpace(routingParts[index]) && routingParts[index].Equals(bindingParts[index], StringComparison.OrdinalIgnoreCase));
         }
 
         // return the result

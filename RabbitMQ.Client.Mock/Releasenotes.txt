@@ -1,3 +1,10 @@
+1.2.3	Release (2025-05-22)
+- Removed obsolete code (PublishMessageOperation)
+- Fixed issue with AsyncAutoResetEvent sometimes immediately reporting timeout.
+- Excluded some FakeChannel methods from code coverage because they only forward call to overload.
+- Added unit test for BasicRejectAsync
+- Tested and fixed Fanout, Headers & Topic exchanges.
+
 1.2.2	Release (2025-05-22)
 - Fixed a bug with ConsumerCountAsync throwing exception because of wrong datatype being returned.
 - Fixed a bug with BasicNackAsync not returning message to queue when requeue is set to true.

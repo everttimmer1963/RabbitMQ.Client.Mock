@@ -28,7 +28,7 @@ internal sealed class AsyncAutoResetEvent : IDisposable
     {
         // Fast path: try to wait synchronously first
         if (_event.WaitOne(0))
-            return true;
+            return false;
 
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         RegisteredWaitHandle? registration = null;

@@ -1,6 +1,9 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
+using RabbitMQ.Client.Mock.Server.Bindings;
 using RabbitMQ.Client.Mock.Server.Data;
+using RabbitMQ.Client.Mock.Server.Operations;
+using RabbitMQ.Client.Mock.Server.Queues;
 using System.Xml.Linq;
 
 namespace RabbitMQ.Client.Mock.Server.Exchanges;
@@ -49,5 +52,32 @@ internal class FanoutExchange(IRabbitServer server, string name) : RabbitExchang
                 }
             }
         }
+    }
+
+    public override ValueTask<OperationResult> QueueBindAsync(RabbitQueue queueToBind, IDictionary<string, object?>? arguments = null, string? bindingKey = null)
+    {
+        // Fanout exchanges ignore the routing key for queue bindings.
+        // To get all queues in the same binding, we use the exchange name as the binding key.
+        string key = this.Name;
+
+        // check if we already have binding. if we don't, create a new one.
+        var binding = Server.QueueBindings.TryGetValue(key, out var bnd) ? bnd : null;
+        if (binding is null)
+        {
+            binding = new QueueBinding { Exchange = this, Arguments = arguments };
+            binding.BoundQueues.Add(queueToBind.Name, queueToBind);
+            Server.QueueBindings.TryAdd(key, binding);
+
+            return ValueTask.FromResult(OperationResult.Success($"Queue '{queueToBind.Name}' bound to exchange '{this.Name}' with key '{key}'."));
+        }
+
+        // the binding exists. check if the target queue is already bound. If so, return success.
+        if (!binding.BoundQueues.TryAdd(queueToBind.Name, queueToBind))
+        {
+            return ValueTask.FromResult(OperationResult.Success($"Queue '{queueToBind.Name}' already bound to exchange '{Name}' with key '{key}'."));
+        }
+
+        // the binding was added. return success.
+        return ValueTask.FromResult(OperationResult.Success($"Queue '{queueToBind.Name}' bound to exchange '{Name}' with key '{key}'."));
     }
 }
