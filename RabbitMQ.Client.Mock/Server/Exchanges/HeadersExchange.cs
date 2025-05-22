@@ -1,6 +1,8 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
+using RabbitMQ.Client.Mock.Server.Bindings;
 using RabbitMQ.Client.Mock.Server.Data;
+using RabbitMQ.Client.Mock.Server.Operations;
 using RabbitMQ.Client.Mock.Server.Queues;
 
 namespace RabbitMQ.Client.Mock.Server.Exchanges;
@@ -32,6 +34,42 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
             await exchange.PublishMessageAsync(routingKey, message).ConfigureAwait(false);
             Console.WriteLine($"{GetType().Name}: Message published to exchange: {exchange.Name}");
         }
+    }
+
+    public override async ValueTask<OperationResult> QueueBindAsync(RabbitQueue queueToBind, IDictionary<string, object?>? arguments = null, string? bindingKey = null)
+    {
+        // Header exchanges differentiate it bound queues by the arguments. The binding key isn't used.
+        // In order to avoid confusion, we use the binding arguments as the key for the binding by conveting
+        // it to a string.
+        //
+        // this is a header exchange so we should have at least one header in the arguments.
+        if (arguments is null || arguments.Count == 0)
+        {
+            return OperationResult.Failure(new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"Header exchange '{Name}' requires at least one header in the arguments.")));
+        }
+
+        // create a bindingkey string from the arguments.
+        var key = await ConvertToBindingStringAsync(arguments);
+
+        // check if we already have binding. if we don't, create a new one.
+        var binding = Server.QueueBindings.TryGetValue(key, out var bnd) ? bnd : null;
+        if (binding is null)
+        {
+            binding = new QueueBinding { Exchange = this, Arguments = arguments };
+            binding.BoundQueues.Add(queueToBind.Name, queueToBind);
+            Server.QueueBindings.TryAdd(key, binding);
+
+            return OperationResult.Success($"Queue '{queueToBind.Name}' bound to exchange '{this.Name}' with key '{key}'.");
+        }
+
+        // the binding exists. check if the target queue is already bound. If so, return success.
+        if (!binding.BoundQueues.TryAdd(queueToBind.Name, queueToBind))
+        {
+            return OperationResult.Success($"Queue '{queueToBind.Name}' already bound to exchange '{Name}' with key '{key}'.");
+        }
+
+        // the binding was added. return success.
+        return OperationResult.Success($"Queue '{queueToBind.Name}' bound to exchange '{Name}' with key '{key}'.");
     }
 
     private ValueTask<IList<RabbitQueue>> GetQueuesThatMatchAllOrAnyHeaders(IDictionary<string, object?>? arguments)
@@ -187,5 +225,15 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
             }
         }
         return ValueTask.FromResult<IList<RabbitExchange>>(exchanges);
+    }
+
+    private ValueTask<string> ConvertToBindingStringAsync(IDictionary<string, object?> arguments)
+    {
+        var entries = arguments
+            .Where(arg => !arg.Key.Equals("x-match"))
+            .OrderBy(arg => arg.Key)
+            .Select(entry => $"{entry.Key}={entry.Value}")
+            .ToArray();
+        return ValueTask.FromResult(string.Join(';', entries));
     }
 }

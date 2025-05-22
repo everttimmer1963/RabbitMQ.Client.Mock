@@ -1,6 +1,8 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Client.Mock.Server.Data;
+using RabbitMQ.Client.Mock.Server.Operations;
+using RabbitMQ.Client.Mock.Server.Queues;
 
 namespace RabbitMQ.Client.Mock.Server.Exchanges;
 internal class TopicExchange(IRabbitServer server, string name) : RabbitExchange(server, name, ExchangeType.Topic)
@@ -56,6 +58,11 @@ internal class TopicExchange(IRabbitServer server, string name) : RabbitExchange
                 }
             }
         }
+    }
+
+    public override ValueTask<OperationResult> QueueBindAsync(RabbitQueue queue, IDictionary<string, object?>? arguments = null, string? routingKey = null)
+    {
+        return base.QueueBindAsync(queue, arguments, routingKey);
     }
 
     private bool IsTopicMatch(string bindingKey, string routingKey)

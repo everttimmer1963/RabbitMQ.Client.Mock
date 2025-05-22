@@ -1,7 +1,9 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
+using RabbitMQ.Client.Mock.Server.Bindings;
 using RabbitMQ.Client.Mock.Server.Data;
 using RabbitMQ.Client.Mock.Server.Operations;
+using RabbitMQ.Client.Mock.Server.Queues;
 
 namespace RabbitMQ.Client.Mock.Server.Exchanges;
 internal class DirectExchange(IRabbitServer server, string name) : RabbitExchange(server, name, ExchangeType.Direct)
@@ -43,5 +45,11 @@ internal class DirectExchange(IRabbitServer server, string name) : RabbitExchang
                 Console.WriteLine($"{GetType().Name}: Message published to exchange: {boundExchange.Value.Name}");
             }
         }
+    }
+
+    public override ValueTask<OperationResult> QueueBindAsync(RabbitQueue queueToBind, IDictionary<string, object?>? arguments = null, string? bindingKey = null)
+    {
+        // the base implementation will suffice for direct exchanges.
+        return base.QueueBindAsync(queueToBind, arguments, bindingKey);
     }
 }
