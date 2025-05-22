@@ -6,6 +6,7 @@ using RabbitMQ.Client.Mock.Server.Exchanges;
 using RabbitMQ.Client.Mock.Server.Operations;
 using RabbitMQ.Client.Mock.Server.Queues;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 namespace RabbitMQ.Client.Mock.Server;
 
@@ -152,6 +153,7 @@ internal class RabbitServer : IRabbitServer
         await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
     }
 
+    [ExcludeFromCodeCoverage]
     public async ValueTask BasicPublishAsync<TProperties>(FakeChannel channel, CachedString exchange, CachedString routingKey, bool mandatory, TProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default) where TProperties : IReadOnlyBasicProperties, IAmqpHeader
     {
         await BasicPublishAsync(channel, exchange.Value, routingKey.Value, mandatory, basicProperties, body, cancellationToken).ConfigureAwait(false);
