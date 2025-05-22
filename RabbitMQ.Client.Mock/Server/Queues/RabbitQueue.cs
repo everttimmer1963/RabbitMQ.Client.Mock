@@ -74,7 +74,7 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
         {
             return null;
         }
-        if (autoAcknowledge)
+        if (!autoAcknowledge)
         {
             await CopyToPendingConfirmsAsync(channelNumber, message).ConfigureAwait(false);
         }

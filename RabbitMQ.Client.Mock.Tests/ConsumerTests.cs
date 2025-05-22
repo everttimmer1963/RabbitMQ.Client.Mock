@@ -1,9 +1,36 @@
 ﻿using RabbitMQ.Client.Events;
+using System.Text;
 
 namespace RabbitMQ.Client.Mock.Tests;
 
 public class ConsumerTests : TestBase
 {
+    [Fact]
+    public async Task When_Retrieving_Message_From_Queue_And_Nack_It_With_ReQueue_Option_Set_Then_Queue_Should_Contain_Message()
+    {
+        // Arrange
+        var queueName = await CreateUniqueQueueNameAsync();
+        var connection = await factory.CreateConnectionAsync();
+        var channel = await connection.CreateChannelAsync();
+        await channel.QueueDeclareAsync(queueName, durable: true, exclusive: false, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
+        var message = "Hello world! This is a test message.";
+        await channel.BasicPublishAsync(string.Empty, routingKey: queueName, Encoding.UTF8.GetBytes(message));
+
+        // Act
+        var result = await channel.BasicGetAsync(queueName, autoAck: false, cancellationToken: default);
+        await channel.BasicNackAsync(result.DeliveryTag, false, true);
+        var requeuedMessage = await channel.BasicGetAsync(queueName, autoAck: true, cancellationToken: default);
+
+        // Assert
+        Assert.NotNull(requeuedMessage);
+
+        // Clean-up
+        await channel.QueueDeleteAsync(queueName, ifUnused: false, ifEmpty: false, cancellationToken: default);
+        await channel.CloseAsync();
+        await channel.DisposeAsync();
+        await connection.CloseAsync();
+        await connection.DisposeAsync();
+    }
 
     [Fact]
     public async Task When_Retrieving_Message_From_Empty_Queue_Then_Returns_Null()
