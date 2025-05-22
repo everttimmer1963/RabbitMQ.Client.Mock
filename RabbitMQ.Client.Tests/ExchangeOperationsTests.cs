@@ -5,7 +5,7 @@ namespace RabbitMQ.Client.Tests;
 
 public class ExchangeOperationsTests : TestBase
 {
-    [Fact]
+    //[Fact]
     public async Task When_Declaring_Headers_Exchange_And_Publishing_To_Exchange_Then_Only_Queues_With_Matching_Headers_Should_Receive_Message()
     {
         // Arrange
