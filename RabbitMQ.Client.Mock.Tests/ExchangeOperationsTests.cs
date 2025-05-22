@@ -129,6 +129,37 @@ public class ExchangeOperationsTests : TestBase
         await connection.DisposeAsync();
     }
 
+
+    [Fact]
+    public async Task When_Binding_And_Unbinding_Exchange_To_And_From_Other_Exchange_Then_No_Exception_Is_Thrown()
+    {
+        // Arrange
+        var firstExchangeName = await CreateUniqueExchangeNameAsync();
+        var secondExchangeName = await CreateUniqueExchangeNameAsync();
+        var connection = await factory.CreateConnectionAsync();
+        var channel = await connection.CreateChannelAsync();
+
+        // Act
+        await channel.ExchangeDeclareAsync(firstExchangeName, ExchangeType.Direct, durable: true, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
+        await channel.ExchangeDeclareAsync(secondExchangeName, ExchangeType.Direct, durable: true, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
+
+        // Bind the first exchange to the second exchange
+        await channel.ExchangeBindAsync(secondExchangeName, firstExchangeName, routingKey: "", arguments: null, noWait: false, cancellationToken: default);
+        await Task.Delay(250);
+        await channel.ExchangeUnbindAsync(secondExchangeName, firstExchangeName, routingKey: "", arguments: null, noWait: false, cancellationToken: default);
+
+        // Assert
+        Assert.True(true);
+
+        // Clean-up (we need to reconnect after an exception)
+        await channel.ExchangeDeleteAsync(firstExchangeName, ifUnused: false, cancellationToken: default);
+        await channel.ExchangeDeleteAsync(secondExchangeName, ifUnused: false, cancellationToken: default);
+        await channel.CloseAsync();
+        await channel.DisposeAsync();
+        await connection.CloseAsync();
+        await connection.DisposeAsync();
+    }
+
     [Fact]
     public async Task When_Binding_Exchange_To_Default_Exchange_Then_No_Exception_Is_Thrown()
     {

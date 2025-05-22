@@ -4,7 +4,7 @@ using RabbitMQ.Client.Exceptions;
 namespace RabbitMQ.Client.Mock.Server.Operations;
 internal class ExchangeUnbindOperation(IRabbitServer server, string source, string destination, string routingKey, IDictionary<string, object?>? arguments = null) : Operation(server)
 {
-    public override bool IsValid => !(Server is null || source is null || string.IsNullOrEmpty(destination) || string.IsNullOrEmpty(routingKey));
+    public override bool IsValid => !(Server is null);
 
     public override ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)
     {
