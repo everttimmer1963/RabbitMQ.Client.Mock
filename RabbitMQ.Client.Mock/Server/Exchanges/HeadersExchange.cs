@@ -8,19 +8,13 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
 {
     public override async ValueTask PublishMessageAsync(string routingKey, RabbitMessage message)
     {
-        var xmatch = message.BasicProperties.Headers?.FirstOrDefault(x => x.Key.Equals("x-match")).Value as string;
-        if (xmatch is null)
-        {
-            throw new ArgumentException("x-match header not found in message properties.");
-        }
-
         var criteria = message.BasicProperties.Headers?
             .Where(x => !x.Key.Equals("x-match"))
             .ToDictionary(x => x.Key, x => x.Value);
 
         // get the queues that match the criteria, according to the x-match value.
-        var queuesToPublishTo = await GetQueuesThatMatchAllOrAnyHeaders(criteria, xmatch);
-        var exchangesToPublishTo = await GetExchangesThatMatchAllOrAnyHeaders(criteria, xmatch);
+        var queuesToPublishTo = await GetQueuesThatMatchAllOrAnyHeaders(criteria);
+        var exchangesToPublishTo = await GetExchangesThatMatchAllOrAnyHeaders(criteria);
         if (queuesToPublishTo.Count == 0 && exchangesToPublishTo.Count == 0)
         {
             throw new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Library, 0, $"No bound exchanges or queues found for exchange '{Name}' matching any or all the headers."));
@@ -40,15 +34,27 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
         }
     }
 
-    private ValueTask<IList<RabbitQueue>> GetQueuesThatMatchAllOrAnyHeaders(IDictionary<string, object?>? criteria, string? match)
+    private ValueTask<IList<RabbitQueue>> GetQueuesThatMatchAllOrAnyHeaders(IDictionary<string, object?>? arguments)
     {
         List<RabbitQueue> queues = new();
         foreach (var be in QueueBindings)
         {
             var binding = be.Value;
+            Dictionary<string,object?> bindingHeaders = binding.Arguments?.ToDictionary(arg => arg.Key, arg => arg.Value) ?? new Dictionary<string, object?>();
+
+            // no operator found, then we skip this binding.
+            var exists = bindingHeaders.TryGetValue("x-match", out var m);
+            if(!exists || string.IsNullOrWhiteSpace((string?)m))
+            {
+                continue;
+            }
+
+            // get remaining criteria.
+            string match = (string)m!;
+            var criteria = bindingHeaders.Where(x => !x.Key.Equals("x-match")).ToDictionary(x => x.Key, x => x.Value);
 
             // when there are no criteria, we add all queues bound to this exchange.
-            if (criteria is not { Count: > 0 })
+            if (criteria.Count == 0)
             {
                 binding.BoundQueues.Values
                     .ToList()
@@ -56,22 +62,18 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
                 continue;
             }
 
-            // no arguments ?, skip this binding.
-            if (binding.Arguments is null || binding.Arguments.Count == 0)
-            {
-                continue;
-            }
-
+            // okay, we have criteria. now we must have arguments too.
+            Dictionary<string,object?> headers = arguments?.ToDictionary(arg => arg.Key, arg => arg.Value) ?? new Dictionary<string, object?>();
             bool doBind = false;
 
             // all criteria must match arguments.
-            if (match?.Equals("all") ?? false)
+            if (match.Equals("all"))
             {
                 // check if all criteria match.
                 var matches = true;
-                foreach (var header in criteria)
+                foreach (var header in headers)
                 {
-                    if (!(binding.Arguments.ContainsKey(header.Key) && binding.Arguments[header.Key] == header.Value))
+                    if (!(criteria.ContainsKey(header.Key) && criteria[header.Key] == header.Value))
                     {
                         matches = false;
                         break;
@@ -80,13 +82,13 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
                 doBind = matches;
             }
 
-            if (match?.Equals("any") ?? false)
+            if (match.Equals("any"))
             {
                 // check if any criteria match.
                 var matches = false;
-                foreach (var header in criteria)
+                foreach (var header in headers)
                 {
-                    if (binding.Arguments.ContainsKey(header.Key) && binding.Arguments[header.Key] == header.Value)
+                    if (criteria.ContainsKey(header.Key) && criteria[header.Key] == header.Value)
                     {
                         matches = true;
                         break;
@@ -106,15 +108,28 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
         return ValueTask.FromResult<IList<RabbitQueue>>(queues);
     }
 
-    private ValueTask<IList<RabbitExchange>> GetExchangesThatMatchAllOrAnyHeaders(IDictionary<string, object?>? criteria, string? match)
+    private ValueTask<IList<RabbitExchange>> GetExchangesThatMatchAllOrAnyHeaders(IDictionary<string, object?>? arguments)
     {
         List<RabbitExchange> exchanges = new();
         foreach (var be in ExchangeBindings)
         {
             var binding = be.Value;
+            Dictionary<string,object?> bindingHeaders = binding.Arguments?.ToDictionary(arg => arg.Key, arg => arg.Value) ?? new Dictionary<string, object?>();
+
+
+            // no operator found, then we skip this binding.
+            var exists = bindingHeaders.TryGetValue("x-match", out var m);
+            if (!exists || string.IsNullOrWhiteSpace((string?)m))
+            {
+                continue;
+            }
+
+            // get remaining criteria.
+            string match = (string)m!;
+            var criteria = bindingHeaders.Where(x => !x.Key.Equals("x-match")).ToDictionary(x => x.Key, x => x.Value);
 
             // when there are no criteria, we add all queues bound to this exchange.
-            if (criteria is not { Count: > 0 })
+            if (arguments is not { Count: > 0 })
             {
                 binding.BoundExchanges.Values
                     .ToList()
@@ -128,16 +143,18 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
                 continue;
             }
 
+            // okay, we have criteria. now we must have arguments too.
+            Dictionary<string, object?> headers = arguments?.ToDictionary(arg => arg.Key, arg => arg.Value) ?? new Dictionary<string, object?>();
             bool doBind = false;
 
             // all criteria must match arguments.
-            if (match?.Equals("all") ?? false)
+            if (match.Equals("all"))
             {
                 // check if all criteria match.
                 var matches = true;
-                foreach (var header in criteria)
+                foreach (var header in headers)
                 {
-                    if (!(binding.Arguments.ContainsKey(header.Key) && binding.Arguments[header.Key] == header.Value))
+                    if (!(criteria.ContainsKey(header.Key) && criteria[header.Key] == header.Value))
                     {
                         matches = false;
                         break;
@@ -146,13 +163,13 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
                 doBind = matches;
             }
 
-            if (match?.Equals("any") ?? false)
+            if (match.Equals("any"))
             {
                 // check if any criteria match.
                 var matches = false;
-                foreach (var header in criteria)
+                foreach (var header in headers)
                 {
-                    if (binding.Arguments.ContainsKey(header.Key) && binding.Arguments[header.Key] == header.Value)
+                    if (criteria.ContainsKey(header.Key) && criteria[header.Key] == header.Value)
                     {
                         matches = true;
                         break;
