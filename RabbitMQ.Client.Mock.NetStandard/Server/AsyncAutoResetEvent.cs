@@ -10,12 +10,12 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
         private volatile bool _disposed;
         private readonly TimeSpan _timeOut;
 
-        public AsyncAutoResetEvent(bool initialState = false, TimeSpan? timeOut = null)
+        public AsyncAutoResetEvent(bool initialState = false, TimeSpan timeOut = default)
         {
             _event = new AutoResetEvent(initialState);
-            _timeOut = (timeOut == null)
+            _timeOut = (timeOut == default)
                 ? TimeSpan.FromSeconds(30)
-                : timeOut.Value;
+                : timeOut;
         }
 
         public void Set()

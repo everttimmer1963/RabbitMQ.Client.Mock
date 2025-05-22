@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System;
+using RabbitMQ.Client.Mock.NetStandard.Server.Queues;
 
 namespace RabbitMQ.Client.Mock.NetStandard.Server.Exchanges
 {
@@ -48,7 +49,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Exchanges
             }
         }
 
-        private ValueTask<IList<RabbitQueue>> GetQueuesThatMatchAllOrAnyHeaders(IDictionary<string, object?>? criteria, string? match)
+        private ValueTask<IList<RabbitQueue>> GetQueuesThatMatchAllOrAnyHeaders(IDictionary<string, object> criteria, string match)
         {
             List<RabbitQueue> queues = new List<RabbitQueue>();
             foreach (var be in QueueBindings)

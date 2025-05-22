@@ -17,7 +17,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
         private bool _disposed;
         private int _connectionNumber;
         private readonly FakeConnectionOptions _options;
-        private readonly List<IChannel> _channels = new();
+        private readonly List<IChannel> _channels = new List<IChannel>();
         private IRabbitServer _server;
 
         public FakeConnection(FakeConnectionOptions options)
@@ -30,9 +30,9 @@ namespace RabbitMQ.Client.Mock.NetStandard
 
         public ushort ChannelMax => _options.ChannelMax;
 
-        public IDictionary<string, object?> ClientProperties => _options.ClientProperties;
+        public IDictionary<string, object> ClientProperties => _options.ClientProperties;
 
-        public ShutdownEventArgs? CloseReason { get; private set; }
+        public ShutdownEventArgs CloseReason { get; private set; }
 
         public AmqpTcpEndpoint Endpoint { get; private set; }
 
@@ -44,11 +44,11 @@ namespace RabbitMQ.Client.Mock.NetStandard
 
         public IProtocol Protocol { get; private set; }
 
-        public IDictionary<string, object?>? ServerProperties { get; private set; }
+        public IDictionary<string, object> ServerProperties { get; private set; }
 
         public IEnumerable<ShutdownReportEntry> ShutdownReport { get; private set; } = Enumerable.Empty<ShutdownReportEntry>();
 
-        public string? ClientProvidedName => _options.ClientProvidedName;
+        public string ClientProvidedName => _options.ClientProvidedName;
 
         public int LocalPort { get; set; }
 
@@ -80,7 +80,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
             return Task.CompletedTask;
         }
 
-        public Task<IChannel> CreateChannelAsync(CreateChannelOptions? options = null, CancellationToken cancellationToken = default)
+        public Task<IChannel> CreateChannelAsync(CreateChannelOptions options = null, CancellationToken cancellationToken = default)
         {
             var channel = new FakeChannel(_server, options, _connectionNumber);
             _channels.Add(channel);

@@ -20,6 +20,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="..\Rabbit-128.ico" Link="Rabbit-128.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\licence.txt">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>

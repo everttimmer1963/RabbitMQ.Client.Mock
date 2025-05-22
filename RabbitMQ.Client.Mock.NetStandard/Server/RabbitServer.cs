@@ -17,6 +17,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
         private ulong _publishedSequenceNumber = 0;
         private int _lastChannelNumber = 0;
         private int _lastConnectionNumber = 0;
+        private static object _lock = new object();
 
         public RabbitServer()
         {
@@ -126,7 +127,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
             await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
         }
 
-        public async Task<string> BasicConsumeAsync(FakeChannel channel, string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
+        public async Task<string> BasicConsumeAsync(FakeChannel channel, string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object> arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
         {
             var operation = new BasicConsumeOperation(this, channel, queue, autoAck, consumerTag, noLocal, exclusive, arguments, consumer);
             var outcome = await Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
@@ -134,7 +135,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
             return result ?? string.Empty;
         }
 
-        public async Task<BasicGetResult?> BasicGetAsync(int channelNumber, string queue, bool autoAck, CancellationToken cancellationToken = default)
+        public async Task<BasicGetResult> BasicGetAsync(int channelNumber, string queue, bool autoAck, CancellationToken cancellationToken = default)
         {
             var operation = new BasicGetOperation(this, channelNumber, queue, autoAck);
             var outcome = await Processor.EnqueueOperationAsync(operation);
@@ -190,7 +191,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
             return await HandleOperationResult<uint>(outcome, operation.OperationId).ConfigureAwait(false);
         }
 
-        public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object> arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
         {
             var operation = new ExchangeBindOperation(this, source, destination, routingKey, arguments);
             var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -203,7 +204,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
             await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
         }
 
-        public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object> arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
         {
             var operation = new ExchangeDeclareOperation(this, exchange, type, durable, autoDelete, arguments, passive);
             var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -229,7 +230,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
             await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
         }
 
-        public async Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object> arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
         {
             var operation = new ExchangeUnbindOperation(this, source, destination, routingKey, arguments);
             var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -238,7 +239,10 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
 
         public ValueTask<ulong> GetNextPublishSequenceNumberAsync(CancellationToken cancellationToken = default)
         {
-            return ValueTask.FromResult(Interlocked.Increment(ref _publishedSequenceNumber));
+            lock (_lock)
+            {
+                return new ValueTask<ulong>(++_publishedSequenceNumber);
+            }
         }
 
         public async Task<uint> MessageCountAsync(string queue, CancellationToken cancellationToken = default)
@@ -248,14 +252,14 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
             return await HandleOperationResult<uint>(outcome, operation.OperationId).ConfigureAwait(false);
         }
 
-        public async Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object> arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
         {
             var operation = new QueueBindOperation(this, exchange, queue, routingKey, arguments);
             var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken).ConfigureAwait(false);
             await HandleOperationResult(outcome, operation.OperationId).ConfigureAwait(false);
         }
 
-        public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object> arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
         {
             var operation = new QueueDeclareOperation(this, queue, durable, exclusive, autoDelete, arguments, passive);
             var outcome = await Processor.EnqueueOperationAsync(operation, noWait, true, cancellationToken: cancellationToken);
@@ -283,7 +287,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
             return await HandleOperationResult<uint>(outcome, operation.OperationId).ConfigureAwait(false);
         }
 
-        public async Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
+        public async Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object> arguments = null, CancellationToken cancellationToken = default)
         {
             var operation = new QueueUnbindOperation(this, exchange, queue, routingKey, arguments);
             var outcome = await Processor.EnqueueOperationAsync(operation).ConfigureAwait(false);
@@ -291,7 +295,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server
         }
         #endregion
 
-        private ValueTask HandleOperationResult(OperationResult? outcome, Guid operationId)
+        private ValueTask HandleOperationResult(OperationResult outcome, Guid operationId)
         {
             if (outcome is null)
             {

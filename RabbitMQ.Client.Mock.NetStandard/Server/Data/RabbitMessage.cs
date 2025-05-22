@@ -1,4 +1,6 @@
-﻿namespace RabbitMQ.Client.Mock.NetStandard.Server.Data
+﻿using System;
+
+namespace RabbitMQ.Client.Mock.NetStandard.Server.Data
 {
     internal class RabbitMessage
     {
@@ -6,7 +8,7 @@
         public bool Mandatory { get; set; }
         public bool Immediate { get; set; }
         public IReadOnlyBasicProperties BasicProperties { get; set; }
-        public byte[] Body { get; set; } = [];
+        public byte[] Body { get; set; } = Array.Empty<byte>();
 
         #region Routing Properties
         public bool Redelivered { get; set; }

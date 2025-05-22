@@ -184,7 +184,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Queues
         /// Removes the first node from the <see cref="ConcurrentLinkedList{T}"/> and returns its value.
         /// </summary>
         /// <param name="value">The node that was removed.</param>
-        /// <returns><see langword="True"/> if the first node was removed succesfully; otherwise <see langword="False"/>. <see cref="TryRemoveFirst(out T?)"/> also returns fals if the list contains no nodes.</returns>
+        /// <returns><see langword="True"/> if the first node was removed succesfully; otherwise <see langword="False"/>. <see cref="TryRemoveFirst(out T)"/> also returns fals if the list contains no nodes.</returns>
         public bool TryRemoveFirst(out T value)
         {
             _semaphore.Wait();

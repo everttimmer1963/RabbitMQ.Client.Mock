@@ -1,10 +1,21 @@
 ﻿using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RabbitMQ.Client.Mock.NetStandard.Server.Operations
 {
-    internal class QueuePurgeOperation(IRabbitServer server, string queue) : Operation(server)
+    internal class QueuePurgeOperation : Operation
     {
+        readonly string queue;
+
+        public QueuePurgeOperation(IRabbitServer server, string queue)
+            : base(server)
+        {
+            this.queue = queue ?? throw new ArgumentNullException(nameof(queue));
+        }
+
         public override bool IsValid => !(Server is null || string.IsNullOrEmpty(queue));
 
         public override async ValueTask<OperationResult> ExecuteAsync(CancellationToken cancellationToken)

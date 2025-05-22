@@ -1,20 +1,19 @@
 ﻿using RabbitMQ.Client.Events;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Threading;
-using System;
-using RabbitMQ.Client.Mock.NetStandard.Domain;
 using RabbitMQ.Client.Mock.NetStandard.Server;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RabbitMQ.Client.Mock.NetStandard
 {
     internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
     {
         private bool _disposed;
-        private readonly CreateChannelOptions? _options;
+        private readonly CreateChannelOptions _options;
         private readonly IRabbitServer _server;
 
-        public FakeChannel(IRabbitServer server, CreateChannelOptions? options, int connectionNumber)
+        public FakeChannel(IRabbitServer server, CreateChannelOptions options, int connectionNumber)
         {
             _server = server;
             _options = options;
@@ -29,15 +28,15 @@ namespace RabbitMQ.Client.Mock.NetStandard
 
         public int ChannelNumber { get; private set; }
 
-        public ShutdownEventArgs? CloseReason { get; private set; }
+        public ShutdownEventArgs CloseReason { get; private set; }
 
-        public IAsyncBasicConsumer? DefaultConsumer { get; set; }
+        public IAsyncBasicConsumer DefaultConsumer { get; set; }
 
         public bool IsClosed { get; private set; }
 
         public bool IsOpen { get; private set; }
 
-        public string? CurrentQueue { get; private set; }
+        public string CurrentQueue { get; private set; }
 
         public TimeSpan ContinuationTimeout { get; set; }
 
@@ -49,12 +48,12 @@ namespace RabbitMQ.Client.Mock.NetStandard
         private AsyncEventingWrapper<FlowControlEventArgs> _flowControlAsyncWrapper;
         private AsyncEventingWrapper<ShutdownEventArgs> _channelShutdownAsyncWrapper;
 
-        public event AsyncEventHandler<BasicAckEventArgs> BasicAcksAsync = null!;
-        public event AsyncEventHandler<BasicNackEventArgs> BasicNacksAsync = null!;
-        public event AsyncEventHandler<ShutdownEventArgs> ChannelShutdownAsync = null!;
-        public event AsyncEventHandler<BasicReturnEventArgs> BasicReturnAsync = null!;
-        public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync = null!;
-        public event AsyncEventHandler<FlowControlEventArgs> FlowControlAsync = null!;
+        public event AsyncEventHandler<BasicAckEventArgs> BasicAcksAsync = null;
+        public event AsyncEventHandler<BasicNackEventArgs> BasicNacksAsync = null;
+        public event AsyncEventHandler<ShutdownEventArgs> ChannelShutdownAsync = null;
+        public event AsyncEventHandler<BasicReturnEventArgs> BasicReturnAsync = null;
+        public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync = null;
+        public event AsyncEventHandler<FlowControlEventArgs> FlowControlAsync = null;
 
         public async Task HandleBasicReturnAsync(BasicReturnEventArgs args)
         {
@@ -97,12 +96,12 @@ namespace RabbitMQ.Client.Mock.NetStandard
             await Server.BasicCancelAsync(consumerTag, noWait, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object?>? arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
+        public async Task<string> BasicConsumeAsync(string queue, bool autoAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object> arguments, IAsyncBasicConsumer consumer, CancellationToken cancellationToken = default)
         {
             return await Server.BasicConsumeAsync(this, queue, autoAck, consumerTag, noLocal, exclusive, arguments, consumer, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<BasicGetResult?> BasicGetAsync(string queue, bool autoAck, CancellationToken cancellationToken = default)
+        public async Task<BasicGetResult> BasicGetAsync(string queue, bool autoAck, CancellationToken cancellationToken = default)
         {
             return await Server.BasicGetAsync(ChannelNumber, queue, autoAck, cancellationToken).ConfigureAwait(false);
         }
@@ -156,12 +155,12 @@ namespace RabbitMQ.Client.Mock.NetStandard
             return await Server.ConsumerCountAsync(queue, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task ExchangeBindAsync(string destination, string source, string routingKey, IDictionary<string, object> arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
         {
             await Server.ExchangeBindAsync(destination, source, routingKey, arguments, noWait, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object> arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
         {
             await Server.ExchangeDeclareAsync(exchange, type, durable, autoDelete, arguments, passive).ConfigureAwait(false);
         }
@@ -176,7 +175,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
             await Server.ExchangeDeleteAsync(exchange, ifUnused, noWait, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task ExchangeUnbindAsync(string destination, string source, string routingKey, IDictionary<string, object> arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
         {
             await Server.ExchangeUnbindAsync(destination, source, routingKey, arguments, noWait, cancellationToken).ConfigureAwait(false);
         }
@@ -191,12 +190,12 @@ namespace RabbitMQ.Client.Mock.NetStandard
             return await Server.MessageCountAsync(queue, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task QueueBindAsync(string queue, string exchange, string routingKey, IDictionary<string, object> arguments = null, bool noWait = false, CancellationToken cancellationToken = default)
         {
             await Server.QueueBindAsync(queue, exchange, routingKey, arguments, noWait, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
+        public async Task<QueueDeclareOk> QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object> arguments = null, bool passive = false, bool noWait = false, CancellationToken cancellationToken = default)
         {
             return await Server.QueueDeclareAsync(queue, durable, exclusive, autoDelete, arguments, passive).ConfigureAwait(false);
         }
@@ -216,7 +215,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
             return await Server.QueuePurgeAsync(queue, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
+        public async Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object> arguments = null, CancellationToken cancellationToken = default)
         {
             await Server.QueueUnbindAsync(queue, exchange, routingKey, arguments, cancellationToken).ConfigureAwait(false);
         }
@@ -249,7 +248,7 @@ namespace RabbitMQ.Client.Mock.NetStandard
         public ValueTask DisposeAsync()
         {
             Dispose();
-            return ValueTask.CompletedTask;
+            return new ValueTask(Task.CompletedTask);
         }
     }
 }

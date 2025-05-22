@@ -90,14 +90,14 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Queues
         public void CopyToPendingConfirms(int channelNumber, RabbitMessage message)
         {
             var pc = new PendingConfirm(channelNumber, message.DeliveryTag, message, TimeSpan.FromMinutes(30));
-            Server.PendingConfirms.TryAdd((channelNumber, message.DeliveryTag), pc);
+            Server.PendingConfirms.Add((channelNumber, message.DeliveryTag), pc);
         }
 
         public ValueTask CopyToPendingConfirmsAsync(int channelNumber, RabbitMessage message)
         {
             var pc = new PendingConfirm(channelNumber, message.DeliveryTag, message, TimeSpan.FromMinutes(30));
-            Server.PendingConfirms.TryAdd((channelNumber, message.DeliveryTag), pc);
-            return ValueTask.CompletedTask;
+            Server.PendingConfirms.Add((channelNumber, message.DeliveryTag), pc);
+            return new ValueTask(Task.CompletedTask);
         }
 
         public ValueTask PublishMessageAsync(RabbitMessage message)
@@ -109,7 +109,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Queues
             message.Queue = Name.ToString();
             _queue.AddLast(message);
             _waitHandle.Set();
-            return ValueTask.CompletedTask;
+            return new ValueTask(Task.CompletedTask);
         }
 
         public ValueTask RequeueMessageAsync(RabbitMessage message)
@@ -120,14 +120,14 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Queues
             }
             message.Queue = Name.ToString();
             _queue.AddFirst(message);
-            return ValueTask.CompletedTask;
+            return new ValueTask(Task.CompletedTask);
         }
 
         public ValueTask<uint> PurgeAsync()
         {
             var count = (uint)_queue.Count;
             _queue.Clear();
-            return ValueTask.FromResult(count);
+            return new ValueTask<uint>(count);
         }
 
         private async Task DeliveryLoop(CancellationToken cancellationToken)
@@ -151,14 +151,16 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Queues
                         continue;
                     }
 
-                    while (_queue.TryRemoveFirst(out var message) && message is not null)
+                    while (_queue.TryRemoveFirst(out var message) && message != null)
                     {
+                        var rnd = new Random();
+
                         // okay, get the bound consumers. we are goind to select one of the consumers randomly,
                         // and deliver the message to that consumer.
                         var consumers = Consumers.ToArray();
                         var chosenIndex = consumers.Length == 0
                             ? 0
-                            : Random.Shared.Next(0, consumers.Length);
+                            : rnd.Next(0, consumers.Length);
 
                         var binding = consumers[chosenIndex];
 
@@ -171,7 +173,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Queues
                         // now, deliver the message to the consumer.
                         await binding.Value.Consumer.HandleBasicDeliverAsync(
                             binding.Key,
-                            message!.DeliveryTag,
+                            message.DeliveryTag,
                             message.Redelivered,
                             message.Exchange,
                             message.RoutingKey,
@@ -190,7 +192,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Queues
         public ValueTask DisposeAsync()
         {
             Dispose();
-            return ValueTask.CompletedTask;
+            return new ValueTask(Task.CompletedTask);
         }
 
         public void Dispose()

@@ -15,7 +15,7 @@ namespace RabbitMQ.Client.Mock.NetStandard.Server.Operations
         readonly bool _autoDelete;
         readonly IDictionary<string, object> _arguments;
 
-        public QueueDeclareOperation(IRabbitServer server, string queue, bool passive, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object> arguments)
+        public QueueDeclareOperation(IRabbitServer server, string queue, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object> arguments, bool passive = false)
             : base(server)
         {
             this._queue = queue ?? throw new ArgumentNullException(nameof(queue));
