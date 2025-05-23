@@ -114,6 +114,7 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
         }
         message.Queue = Name.ToString();
         _queue.AddFirst(message);
+        _waitHandle.Set();
         return ValueTask.CompletedTask;
     }
 
@@ -122,6 +123,12 @@ internal class RabbitQueue : IDisposable, IAsyncDisposable
         var count = (uint)_queue.Count;
         _queue.Clear();
         return ValueTask.FromResult(count);
+    }
+
+    public ValueTask NotifyConsumerAdded()
+    {
+        _waitHandle.Set();
+        return ValueTask.CompletedTask;
     }
 
     private async Task DeliveryLoop(CancellationToken cancellationToken)

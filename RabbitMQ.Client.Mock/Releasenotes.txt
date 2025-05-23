@@ -1,3 +1,6 @@
+1.2.4	Release (2025-05-23)
+- Fixed a bug that a new consumer on an existing queue containing messages would only receive messages after 30 seconds.
+
 1.2.3	Release (2025-05-22)
 - Removed obsolete code (PublishMessageOperation)
 - Fixed issue with AsyncAutoResetEvent sometimes immediately reporting timeout.
