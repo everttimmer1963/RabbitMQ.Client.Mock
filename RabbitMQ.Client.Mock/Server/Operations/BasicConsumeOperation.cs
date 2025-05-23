@@ -43,7 +43,7 @@ internal class BasicConsumeOperation(IRabbitServer server, IChannel channel, str
                 consumerTag = await Server.GenerateUniqueConsumerTag(queue).ConfigureAwait(false);
             }
 
-            // now, add the new consumer binding.
+            // now, add the new consumer binding, and notify the queue of its existence.
             var binding = new ConsumerBinding(queueInstance, consumer)
             {
                 ChannelNumber = channel.ChannelNumber,
@@ -54,6 +54,8 @@ internal class BasicConsumeOperation(IRabbitServer server, IChannel channel, str
             };
 
             Server.ConsumerBindings.TryAdd(consumerTag, binding);
+            await queueInstance.NotifyConsumerAdded();
+
             return OperationResult.Success($"Consumer '{consumerTag}' added to queue '{queue}' with autoAck={autoAck}, noLocal={noLocal}, exclusive={exclusive}.", consumerTag);
         }
         catch (Exception ex)
