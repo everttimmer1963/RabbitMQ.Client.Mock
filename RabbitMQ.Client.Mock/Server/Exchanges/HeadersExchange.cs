@@ -105,11 +105,14 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
             bool doBind = false;
 
             // all criteria must match arguments.
-            if (match.Equals("all"))
+            if (match.Equals("all") || match.Equals("all-with-x"))
             {
                 // check if all criteria match.
+                var filteredHeaders = match.Equals("all")
+                    ? headers.Where(x => !x.Key.StartsWith("x-")).ToDictionary(x => x.Key, x => x.Value)
+                    : headers;
                 var matches = true;
-                foreach (var header in headers)
+                foreach (var header in filteredHeaders)
                 {
                     if (!(criteria.ContainsKey(header.Key) && criteria[header.Key] == header.Value))
                     {
@@ -120,11 +123,14 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
                 doBind = matches;
             }
 
-            if (match.Equals("any"))
+            if (match.Equals("any") || match.Equals("any-with-x"))
             {
                 // check if any criteria match.
+                var filteredHeaders = match.Equals("any") 
+                    ? headers.Where(x => !x.Key.StartsWith("x-")).ToDictionary(x => x.Key, x => x.Value)
+                    : headers;
                 var matches = false;
-                foreach (var header in headers)
+                foreach (var header in filteredHeaders)
                 {
                     if (criteria.ContainsKey(header.Key) && criteria[header.Key] == header.Value)
                     {
@@ -186,11 +192,14 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
             bool doBind = false;
 
             // all criteria must match arguments.
-            if (match.Equals("all"))
+            if (match.Equals("all") || match.Equals("all-with-x"))
             {
                 // check if all criteria match.
+                var filteredHeaders = match.Equals("all")
+                    ? headers.Where(x => !x.Key.StartsWith("x-")).ToDictionary(x => x.Key, x => x.Value)
+                    : headers;
                 var matches = true;
-                foreach (var header in headers)
+                foreach (var header in filteredHeaders)
                 {
                     if (!(criteria.ContainsKey(header.Key) && criteria[header.Key] == header.Value))
                     {
@@ -201,11 +210,14 @@ internal class HeadersExchange(IRabbitServer server, string name) : RabbitExchan
                 doBind = matches;
             }
 
-            if (match.Equals("any"))
+            if (match.Equals("any") || match.Equals("any-with-x"))
             {
                 // check if any criteria match.
+                var filteredHeaders = match.Equals("any")
+                    ? headers.Where(x => !x.Key.StartsWith("x-")).ToDictionary(x => x.Key, x => x.Value)
+                    : headers;
                 var matches = false;
-                foreach (var header in headers)
+                foreach (var header in filteredHeaders)
                 {
                     if (criteria.ContainsKey(header.Key) && criteria[header.Key] == header.Value)
                     {

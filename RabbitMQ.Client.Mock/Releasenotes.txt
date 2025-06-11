@@ -1,3 +1,6 @@
+1.2.5	Release (2025-05-23)
+- Fixed a bug with the headers exchange not working correctly when using the "x-match" header.
+
 1.2.4	Release (2025-05-23)
 - Fixed a bug that a new consumer on an existing queue containing messages would only receive messages after 30 seconds.
 
