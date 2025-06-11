@@ -5,7 +5,7 @@ namespace RabbitMQ.Client.Tests;
 
 public class ExchangeOperationsTests : TestBase
 {
-    //[Fact]
+    [Fact]
     public async Task When_Declaring_Headers_Exchange_And_Publishing_To_Exchange_Then_Only_Queues_With_Matching_Headers_Should_Receive_Message()
     {
         // Arrange
@@ -21,10 +21,10 @@ public class ExchangeOperationsTests : TestBase
             Priority = 0,
             Headers = new Dictionary<string, object?>
             {
-                { "x-custom-header", "custom-value-1" }
+                { "custom-header", "custom-value-1" }
             }
         };
-        var arguments1 = new Dictionary<string, object?> { { "x-match", "all" }, { "x-custom-header", "custom-value-1" } };
+        var arguments1 = new Dictionary<string, object?> { { "x-match", "all" }, { "custom-header", "custom-value-1" } };
         var properties2 = new BasicProperties
         {
             ContentType = "text/plain",
@@ -32,10 +32,10 @@ public class ExchangeOperationsTests : TestBase
             Priority = 0,
             Headers = new Dictionary<string, object?>
             {
-                { "x-custom-header", "custom-value-2" }
+                { "custom-header", "custom-value-2" }
             }
         };
-        var arguments2 = new Dictionary<string, object?> { { "x-match", "all" }, { "x-custom-header", "custom-value-2" } };
+        var arguments2 = new Dictionary<string, object?> { { "x-match", "all" }, { "custom-header", "custom-value-2" } };
 
         // Act
         await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Headers, durable: true, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
