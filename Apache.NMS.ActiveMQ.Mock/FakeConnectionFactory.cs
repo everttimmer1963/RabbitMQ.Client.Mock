@@ -1,6 +1,11 @@
-﻿namespace Apache.NMS.ActiveMQ.Mock;
+﻿using System;
+using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 
-internal class FakeConnectionFactory : IConnectionFactory
+namespace Apache.NMS.ActiveMQ.Mock;
+
+[ExcludeFromCodeCoverage]
+public class FakeConnectionFactory : IConnectionFactory
 {
     public Uri BrokerUri { get; set; } = new Uri("mock://localhost");
     public IRedeliveryPolicy RedeliveryPolicy { get; set; }

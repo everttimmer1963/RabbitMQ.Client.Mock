@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Apache.NMS.ActiveMQ.Mock;
 
+[ExcludeFromCodeCoverage]
 internal class FakePrimitiveMap : IPrimitiveMap {
     private readonly Dictionary<string, object> _dict = new();
     public object this[string key] { get => _dict[key]; set => _dict[key] = value; }

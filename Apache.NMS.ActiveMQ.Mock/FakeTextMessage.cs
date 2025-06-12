@@ -1,10 +1,10 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Apache.NMS.ActiveMQ.Mock;
 
+[ExcludeFromCodeCoverage]
 internal class FakeTextMessage : ITextMessage
 {
     public string Text { get; set; }

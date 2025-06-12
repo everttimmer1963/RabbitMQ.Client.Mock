@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
+using Apache.NMS.ActiveMQ.Mock.Server;
 
 namespace Apache.NMS.ActiveMQ.Mock;
 
@@ -25,7 +25,9 @@ internal class FakeQueueBrowser : IQueueBrowser
             foreach (var msg in q)
             {
                 if (_selector(msg))
+                {
                     yield return new FakeTextMessage { Text = msg.Body };
+                }
             }
         }
     }

@@ -1,9 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Apache.NMS.ActiveMQ.Mock;
 
+[ExcludeFromCodeCoverage]
 internal class FakeConnection : IConnection, IDisposable
 {
     public bool IsStarted { get; private set; }
