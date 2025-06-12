@@ -3,8 +3,16 @@ namespace Apache.NMS.ActiveMQ.Mock;
 
 internal class FakeConnection : IConnection
 {
-    public ConsumerTransformerDelegate ConsumerTransformer { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-    public ProducerTransformerDelegate ProducerTransformer { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+    Connection connection;
+
+    public ConsumerTransformerDelegate ConsumerTransformer { get; set; }
+    public ProducerTransformerDelegate ProducerTransformer { get; set; }
+
+    public string UserName { get; set; }
+    public string Password { get; set; }
+
+    public Uri BrokerUri { get; set; }
+
     public TimeSpan RequestTimeout { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
     public AcknowledgementMode AcknowledgementMode { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
     public string ClientId { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
