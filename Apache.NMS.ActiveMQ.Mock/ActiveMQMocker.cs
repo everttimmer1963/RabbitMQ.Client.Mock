@@ -2,7 +2,7 @@
 
 public static class ActiveMQMocker
 {
-    private static FakeConnectionFactory? _connectionFactory;
+    private static IConnectionFactory? _connectionFactory;
 
     /// <summary>
     /// Creates the main entry point for the mocking client. From this factory, we can create connections,

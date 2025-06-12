@@ -10,4 +10,8 @@
     <PackageReference Include="Apache.NMS.ActiveMQ" Version="2.1.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Server\" />
+  </ItemGroup>
+
 </Project>
