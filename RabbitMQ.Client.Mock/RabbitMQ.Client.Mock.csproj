@@ -16,7 +16,7 @@
     <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)/ReleaseNotes.txt"))</PackageReleaseNotes>
     <PackageLicenceExpression>GPL-3.0-or-later</PackageLicenceExpression>
     <PackageLicenseFile>licence.txt</PackageLicenseFile>
-    <Version>1.2.5</Version>
+    <Version>7.2.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
+    <PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
   </ItemGroup>
 
 </Project>

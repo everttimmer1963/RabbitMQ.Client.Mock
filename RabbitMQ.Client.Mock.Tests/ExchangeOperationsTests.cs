@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client.Exceptions;
 using System.Text;
+using System.Diagnostics;
 
 namespace RabbitMQ.Client.Mock.Tests;
 
@@ -21,10 +22,10 @@ public class ExchangeOperationsTests : TestBase
             Priority = 0,
             Headers = new Dictionary<string, object?>
             {
-                { "x-custom-header", "custom-value-1" }
+                { "custom-header", "custom-value-1" }
             }
         };
-        var arguments1 = new Dictionary<string, object?> { { "x-match", "all" }, { "x-custom-header", "custom-value-1" } };
+        var arguments1 = new Dictionary<string, object?> { { "x-match", "all" }, { "custom-header", "custom-value-1" } };
         var properties2 = new BasicProperties
         {
             ContentType = "text/plain",
@@ -32,10 +33,10 @@ public class ExchangeOperationsTests : TestBase
             Priority = 0,
             Headers = new Dictionary<string, object?>
             {
-                { "x-custom-header", "custom-value-2" }
+                { "custom-header", "custom-value-2" }
             }
         };
-        var arguments2 = new Dictionary<string, object?> { { "x-match", "all" }, { "x-custom-header", "custom-value-2" } };
+        var arguments2 = new Dictionary<string, object?> { { "x-match", "all" }, { "custom-header", "custom-value-2" } };
 
         // Act
         await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Headers, durable: true, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
@@ -53,7 +54,8 @@ public class ExchangeOperationsTests : TestBase
 
         var receivedOne = false;
         var receivedTwo = false;
-        while (true)
+        var sw = Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < 10000)
         {
             var result = await channel.BasicGetAsync(queueName1, true);
             if (result is not null)
@@ -72,6 +74,8 @@ public class ExchangeOperationsTests : TestBase
             await Task.Delay(100);
         }
 
+        Assert.True(receivedOne && receivedTwo, "Timed out waiting for both header-routed messages.");
+
         var count1 = await channel.MessageCountAsync(queueName1, cancellationToken: default);
         var count2 = await channel.MessageCountAsync(queueName2, cancellationToken: default);
 
@@ -89,7 +93,7 @@ public class ExchangeOperationsTests : TestBase
     }
 
     [Fact]
-    public async Task When_Declaring_Fanout_Exchange_And_Publishing_Message_To_Exchange_Then_Message_Is_Published_To_All_BoundQueues_Regarless_Of_RoutingKey()
+    public async Task When_Declaring_Fanout_Exchange_And_Publishing_Message_To_Exchange_Then_Message_Is_Published_To_All_BoundQueues_Regardless_Of_RoutingKey()
     {
         // Arrange
         var exchangeName = await CreateUniqueExchangeNameAsync();
@@ -121,7 +125,8 @@ public class ExchangeOperationsTests : TestBase
 
         var receivedOne = false;
         var receivedTwo = false;
-        while (true)
+        var sw = Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < 10000)
         {
             var result = await channel.BasicGetAsync(queueName1, true);
             if (result is not null)
@@ -139,6 +144,8 @@ public class ExchangeOperationsTests : TestBase
             }
             await Task.Delay(100);
         }
+
+        Assert.True(receivedOne && receivedTwo, "Timed out waiting for fanout message delivery to both queues.");
 
         // Assert
         Assert.True(true);

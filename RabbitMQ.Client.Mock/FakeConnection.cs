@@ -51,31 +51,26 @@ internal class FakeConnection : IConnection, IDisposable, IAsyncDisposable
     public int RemotePort { get; set; } = DefaultRemotePort;
 
     [ExcludeFromCodeCoverage]
-    public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
-    { 
-        add => throw new NotImplementedException();
-        remove => throw new NotImplementedException();
-    }
+    public event AsyncEventHandler<CallbackExceptionEventArgs>? CallbackExceptionAsync;
     [ExcludeFromCodeCoverage]
-    public event AsyncEventHandler<ShutdownEventArgs> ConnectionShutdownAsync
-    {
-        add => throw new NotImplementedException();
-        remove => throw new NotImplementedException();
-    }
-    public event AsyncEventHandler<AsyncEventArgs> RecoverySucceededAsync;
-    public event AsyncEventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryErrorAsync;
-    public event AsyncEventHandler<ConsumerTagChangedAfterRecoveryEventArgs> ConsumerTagChangeAfterRecoveryAsync;
-    public event AsyncEventHandler<QueueNameChangedAfterRecoveryEventArgs> QueueNameChangedAfterRecoveryAsync;
-    public event AsyncEventHandler<RecoveringConsumerEventArgs> RecoveringConsumerAsync;
-    public event AsyncEventHandler<ConnectionBlockedEventArgs> ConnectionBlockedAsync;
-    public event AsyncEventHandler<AsyncEventArgs> ConnectionUnblockedAsync;
+    public event AsyncEventHandler<ShutdownEventArgs>? ConnectionShutdownAsync;
+    public event AsyncEventHandler<AsyncEventArgs>? RecoverySucceededAsync;
+    public event AsyncEventHandler<ConnectionRecoveryErrorEventArgs>? ConnectionRecoveryErrorAsync;
+    public event AsyncEventHandler<ConsumerTagChangedAfterRecoveryEventArgs>? ConsumerTagChangeAfterRecoveryAsync;
+    public event AsyncEventHandler<QueueNameChangedAfterRecoveryEventArgs>? QueueNameChangedAfterRecoveryAsync;
+    public event AsyncEventHandler<RecoveringConsumerEventArgs>? RecoveringConsumerAsync;
+    public event AsyncEventHandler<ConnectionBlockedEventArgs>? ConnectionBlockedAsync;
+    public event AsyncEventHandler<AsyncEventArgs>? ConnectionUnblockedAsync;
 
-    public Task CloseAsync(ushort reasonCode, string reasonText, TimeSpan timeout, bool abort, CancellationToken cancellationToken = default)
+    public async Task CloseAsync(ushort reasonCode, string reasonText, TimeSpan timeout, bool abort, CancellationToken cancellationToken = default)
     {
         IsOpen = false;
         CloseReason = new ShutdownEventArgs(ShutdownInitiator.Library, reasonCode, reasonText);
-        _channels.ForEach(async ch => await ch.CloseAsync(CloseReason, abort, cancellationToken));
-        return Task.CompletedTask;
+
+        foreach (IChannel channel in _channels)
+        {
+            await channel.CloseAsync(CloseReason, abort, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public Task<IChannel> CreateChannelAsync(CreateChannelOptions? options = null, CancellationToken cancellationToken = default)

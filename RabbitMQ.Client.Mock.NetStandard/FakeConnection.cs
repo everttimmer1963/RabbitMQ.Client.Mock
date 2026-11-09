@@ -54,16 +54,8 @@ namespace RabbitMQ.Client.Mock.NetStandard
 
         public int RemotePort { get; set; } = DefaultRemotePort;
 
-        public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
-        {
-            add => throw new NotImplementedException();
-            remove => throw new NotImplementedException();
-        }
-        public event AsyncEventHandler<ShutdownEventArgs> ConnectionShutdownAsync
-        {
-            add => throw new NotImplementedException();
-            remove => throw new NotImplementedException();
-        }
+        public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync;
+        public event AsyncEventHandler<ShutdownEventArgs> ConnectionShutdownAsync;
         public event AsyncEventHandler<AsyncEventArgs> RecoverySucceededAsync;
         public event AsyncEventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryErrorAsync;
         public event AsyncEventHandler<ConsumerTagChangedAfterRecoveryEventArgs> ConsumerTagChangeAfterRecoveryAsync;
@@ -72,12 +64,15 @@ namespace RabbitMQ.Client.Mock.NetStandard
         public event AsyncEventHandler<ConnectionBlockedEventArgs> ConnectionBlockedAsync;
         public event AsyncEventHandler<AsyncEventArgs> ConnectionUnblockedAsync;
 
-        public Task CloseAsync(ushort reasonCode, string reasonText, TimeSpan timeout, bool abort, CancellationToken cancellationToken = default)
+        public async Task CloseAsync(ushort reasonCode, string reasonText, TimeSpan timeout, bool abort, CancellationToken cancellationToken = default)
         {
             IsOpen = false;
             CloseReason = new ShutdownEventArgs(ShutdownInitiator.Library, reasonCode, reasonText);
-            _channels.ForEach(async ch => await ch.CloseAsync(CloseReason, abort, cancellationToken));
-            return Task.CompletedTask;
+
+            foreach (IChannel channel in _channels)
+            {
+                await channel.CloseAsync(CloseReason, abort, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         public Task<IChannel> CreateChannelAsync(CreateChannelOptions options = null, CancellationToken cancellationToken = default)
@@ -94,21 +89,16 @@ namespace RabbitMQ.Client.Mock.NetStandard
 
         public void Dispose()
         {
-            if (_disposed)
-            {
-                return;
-            }
-            Task.Run(async () => await DisposeAsync());
+            if (_disposed) { return; }
+
+            _disposed = true;
+            _channels.Clear();
         }
 
-        public async ValueTask DisposeAsync()
+        public ValueTask DisposeAsync()
         {
-            if (_disposed)
-            {
-                return;
-            }
-
-            _channels.Clear();
+            Dispose();
+            return new ValueTask(Task.CompletedTask);
         }
     }
 }

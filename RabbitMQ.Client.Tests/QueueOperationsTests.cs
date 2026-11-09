@@ -1,4 +1,5 @@
 ﻿using RabbitMQ.Client.Exceptions;
+using System.Text;
 
 namespace RabbitMQ.Client.Tests;
 public class QueueOperationsTests : TestBase
@@ -61,7 +62,7 @@ public class QueueOperationsTests : TestBase
         var channel = await connection.CreateChannelAsync();
 
         // Act
-        await channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: true, arguments: null, noWait: false, cancellationToken: default);
+        await channel.QueueDeclareAsync(queueName, durable: true, exclusive: false, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
         Func<Task> act = async () => await channel.QueueBindAsync(queueName, "", routingKey: "", arguments: null, noWait: false, cancellationToken: default);
 
         // Assert
@@ -88,7 +89,7 @@ public class QueueOperationsTests : TestBase
         await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct, durable: false, autoDelete: true, arguments: null, noWait: false, cancellationToken: default);
 
         // Act
-        await channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: true, arguments: null, noWait: false, cancellationToken: default);
+        await channel.QueueDeclareAsync(queueName, durable: true, exclusive: false, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
         await channel.QueueBindAsync(queueName, exchangeName, routingKey: "", arguments: null, noWait: false, cancellationToken: default);
 
         // Assert
@@ -128,5 +129,42 @@ public class QueueOperationsTests : TestBase
         await channel.DisposeAsync();
         await connection.CloseAsync();
         await connection.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task When_Calling_PurgeAsync_On_Queue_Then_Queue_Will_Be_Empty()
+    {
+        // Arrange
+        var queueName = await CreateUniqueQueueNameAsync();
+        var connection = await factory.CreateConnectionAsync();
+        var channel = await connection.CreateChannelAsync();
+        await channel.QueueDeclareAsync(queueName, durable: true, exclusive: false, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
+        var message = "Hello world! This is a test message.";
+        await channel.BasicPublishAsync(string.Empty, routingKey: queueName, Encoding.UTF8.GetBytes(message));
+
+        // Act
+        await WaitUntilAsync(() => CheckMessageCountAsync(channel, queueName, 1), timeout: 10000, interval: 100);
+        var result = await channel.QueuePurgeAsync(queueName, cancellationToken: default);
+        await WaitUntilAsync(() => CheckMessageCountAsync(channel, queueName, 0), timeout: 10000, interval: 100);
+
+        var count = await channel.MessageCountAsync(queueName, cancellationToken: default);
+
+        // Assert
+        Assert.True(true);
+
+        // Clean-up
+        await channel.QueueDeleteAsync(queueName, ifUnused: false, ifEmpty: false, cancellationToken: default);
+        await channel.CloseAsync();
+        await channel.DisposeAsync();
+        await connection.CloseAsync();
+        await connection.DisposeAsync();
+        return;
+
+        // Local function to check the message count
+        bool CheckMessageCountAsync(IChannel channel, string queueName, uint expectedCount)
+        {
+            var result = channel.MessageCountAsync(queueName, cancellationToken: default).GetAwaiter().GetResult();
+            return result == expectedCount;
+        }
     }
 }

@@ -1,8 +1,153 @@
 ﻿using RabbitMQ.Client.Events;
+using System.Text;
 
 namespace RabbitMQ.Client.Tests;
 public class ConsumerTests : TestBase
 {
+
+    [Fact]
+    public async Task When_Creating_And_Using_Consumer_For_Messages_From_Existing_Queue_Containing_Messages_Then_MessageDelivery_ShouldStart_Immediately()
+    {
+        var testData = await CreateTestMessagesAsync(50);
+        var queueName = await CreateUniqueQueueNameAsync();
+        var connection = await factory.CreateConnectionAsync();
+        var publisher = await connection.CreateChannelAsync();
+        var consumer = await connection.CreateChannelAsync();
+        await publisher.QueueDeclareAsync(queueName);
+        var consumerSink = new AsyncEventingBasicConsumer(consumer);
+        var properties = new BasicProperties
+        {
+            ContentType = "text/plain",
+            DeliveryMode = DeliveryModes.Persistent,
+            Priority = 0,
+            Headers = new Dictionary<string, object?> { { "x-match", "all" } }
+        };
+        var messagesPublished = 0;
+        var messagesReceived = 0;
+
+        foreach (var message in testData)
+        {
+            var body = Encoding.UTF8.GetBytes(message);
+            await publisher.BasicPublishAsync(string.Empty, queueName, false, properties, body);
+            messagesPublished++;
+        }
+
+        consumerSink.ReceivedAsync += async (sender, args) =>
+        {
+            await Task.Delay(1);
+            messagesReceived++;
+        };
+        var consumerTag = await consumer.BasicConsumeAsync(queueName, true, consumerSink);
+
+        await WaitUntilAsync(() => messagesReceived == messagesPublished, 10000, 100);
+        var consumerCount = await consumer.ConsumerCountAsync(queueName, cancellationToken: default);
+
+        Assert.True(consumerCount == 1);
+        Assert.Equal(messagesPublished, messagesReceived);
+
+        await consumer.BasicCancelAsync(consumerTag);
+        await publisher.QueueDeleteAsync(queueName);
+        await publisher.CloseAsync();
+        await consumer.CloseAsync();
+        await consumer.DisposeAsync();
+        await connection.CloseAsync();
+        await connection.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task When_Creating_And_Using_Consumer_For_Messages_From_Queue_Then_ConsumerCount_ShouldBe_One()
+    {
+        var testData = await CreateTestMessagesAsync(50);
+        var queueName = await CreateUniqueQueueNameAsync();
+        var connection = await factory.CreateConnectionAsync();
+        var publisher = await connection.CreateChannelAsync();
+        var consumer = await connection.CreateChannelAsync();
+        await publisher.QueueDeclareAsync(queueName);
+        var consumerSink = new AsyncEventingBasicConsumer(consumer);
+        var properties = new BasicProperties
+        {
+            ContentType = "text/plain",
+            DeliveryMode = DeliveryModes.Persistent,
+            Priority = 0,
+            Headers = new Dictionary<string, object?> { { "x-match", "all" } }
+        };
+        var messagesPublished = 0;
+        var messagesReceived = 0;
+
+        consumerSink.ReceivedAsync += async (sender, args) =>
+        {
+            await Task.Delay(1);
+            messagesReceived++;
+        };
+        var consumerTag = await consumer.BasicConsumeAsync(queueName, true, consumerSink);
+
+        foreach (var message in testData)
+        {
+            var body = Encoding.UTF8.GetBytes(message);
+            await publisher.BasicPublishAsync(string.Empty, queueName, false, properties, body);
+            messagesPublished++;
+        }
+
+        await WaitUntilAsync(() => messagesReceived == messagesPublished, 10000, 100);
+        var consumerCount = await consumer.ConsumerCountAsync(queueName, cancellationToken: default);
+
+        Assert.True(consumerCount == 1);
+        Assert.Equal(messagesPublished, messagesReceived);
+
+        await consumer.BasicCancelAsync(consumerTag);
+        await publisher.QueueDeleteAsync(queueName);
+        await publisher.CloseAsync();
+        await consumer.CloseAsync();
+        await consumer.DisposeAsync();
+        await connection.CloseAsync();
+        await connection.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task When_Retrieving_Message_From_Queue_And_Nack_It_With_ReQueue_Option_Set_Then_Queue_Should_Contain_Message()
+    {
+        var queueName = await CreateUniqueQueueNameAsync();
+        var connection = await factory.CreateConnectionAsync();
+        var channel = await connection.CreateChannelAsync();
+        await channel.QueueDeclareAsync(queueName, durable: true, exclusive: false, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
+        var message = "Hello world! This is a test message.";
+        await channel.BasicPublishAsync(string.Empty, routingKey: queueName, Encoding.UTF8.GetBytes(message));
+
+        var result = await channel.BasicGetAsync(queueName, autoAck: false, cancellationToken: default);
+        await channel.BasicNackAsync(result!.DeliveryTag, false, true);
+        var requeuedMessage = await channel.BasicGetAsync(queueName, autoAck: true, cancellationToken: default);
+
+        Assert.NotNull(requeuedMessage);
+
+        await channel.QueueDeleteAsync(queueName, ifUnused: false, ifEmpty: false, cancellationToken: default);
+        await channel.CloseAsync();
+        await channel.DisposeAsync();
+        await connection.CloseAsync();
+        await connection.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task When_Retrieving_Message_From_Queue_And_Reject_It_With_ReQueue_Option_Set_Then_Queue_Should_Contain_Message()
+    {
+        var queueName = await CreateUniqueQueueNameAsync();
+        var connection = await factory.CreateConnectionAsync();
+        var channel = await connection.CreateChannelAsync();
+        await channel.QueueDeclareAsync(queueName, durable: true, exclusive: false, autoDelete: false, arguments: null, noWait: false, cancellationToken: default);
+        var message = "Hello world! This is a test message.";
+        await channel.BasicPublishAsync(string.Empty, routingKey: queueName, Encoding.UTF8.GetBytes(message));
+
+        var result = await channel.BasicGetAsync(queueName, autoAck: false, cancellationToken: default);
+        await channel.BasicRejectAsync(result!.DeliveryTag, true);
+        var requeuedMessage = await channel.BasicGetAsync(queueName, autoAck: true, cancellationToken: default);
+
+        Assert.NotNull(requeuedMessage);
+
+        await channel.QueueDeleteAsync(queueName, ifUnused: false, ifEmpty: false, cancellationToken: default);
+        await channel.CloseAsync();
+        await channel.DisposeAsync();
+        await connection.CloseAsync();
+        await connection.DisposeAsync();
+    }
 
     [Fact]
     public async Task When_Retrieving_Message_From_Empty_Queue_Then_Returns_Null()

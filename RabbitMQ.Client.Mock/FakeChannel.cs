@@ -16,6 +16,13 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
         ChannelNumber = Server.RegisterChannel(this);
         ConnectionNumber = connectionNumber;
         IsOpen = true;
+
+        _callbackExceptionAsyncWrapper = new AsyncEventingWrapper<CallbackExceptionEventArgs>(nameof(CallbackExceptionAsync), IgnoreEventCallbackExceptionAsync);
+        _basicAcksAsyncWrapper = new AsyncEventingWrapper<BasicAckEventArgs>(nameof(BasicAcksAsync), IgnoreEventCallbackExceptionAsync);
+        _basicNacksAsyncWrapper = new AsyncEventingWrapper<BasicNackEventArgs>(nameof(BasicNacksAsync), IgnoreEventCallbackExceptionAsync);
+        _basicReturnAsyncWrapper = new AsyncEventingWrapper<BasicReturnEventArgs>(nameof(BasicReturnAsync), IgnoreEventCallbackExceptionAsync);
+        _flowControlAsyncWrapper = new AsyncEventingWrapper<FlowControlEventArgs>(nameof(FlowControlAsync), IgnoreEventCallbackExceptionAsync);
+        _channelShutdownAsyncWrapper = new AsyncEventingWrapper<ShutdownEventArgs>(nameof(ChannelShutdownAsync), IgnoreEventCallbackExceptionAsync);
     }
 
     private IRabbitServer Server => _server;
@@ -44,12 +51,46 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
     private AsyncEventingWrapper<FlowControlEventArgs> _flowControlAsyncWrapper;
     private AsyncEventingWrapper<ShutdownEventArgs> _channelShutdownAsyncWrapper;
 
-    public event AsyncEventHandler<BasicAckEventArgs> BasicAcksAsync = null!;
-    public event AsyncEventHandler<BasicNackEventArgs> BasicNacksAsync = null!;
-    public event AsyncEventHandler<ShutdownEventArgs> ChannelShutdownAsync = null!;
-    public event AsyncEventHandler<BasicReturnEventArgs> BasicReturnAsync = null!;
-    public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync = null!;
-    public event AsyncEventHandler<FlowControlEventArgs> FlowControlAsync = null!;
+    public event AsyncEventHandler<BasicAckEventArgs> BasicAcksAsync
+    {
+        add => _basicAcksAsyncWrapper.AddHandler(value);
+        remove => _basicAcksAsyncWrapper.RemoveHandler(value);
+    }
+
+    public event AsyncEventHandler<BasicNackEventArgs> BasicNacksAsync
+    {
+        add => _basicNacksAsyncWrapper.AddHandler(value);
+        remove => _basicNacksAsyncWrapper.RemoveHandler(value);
+    }
+
+    public event AsyncEventHandler<ShutdownEventArgs> ChannelShutdownAsync
+    {
+        add => _channelShutdownAsyncWrapper.AddHandler(value);
+        remove => _channelShutdownAsyncWrapper.RemoveHandler(value);
+    }
+
+    public event AsyncEventHandler<BasicReturnEventArgs> BasicReturnAsync
+    {
+        add => _basicReturnAsyncWrapper.AddHandler(value);
+        remove => _basicReturnAsyncWrapper.RemoveHandler(value);
+    }
+
+    public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackExceptionAsync
+    {
+        add => _callbackExceptionAsyncWrapper.AddHandler(value);
+        remove => _callbackExceptionAsyncWrapper.RemoveHandler(value);
+    }
+
+    public event AsyncEventHandler<FlowControlEventArgs> FlowControlAsync
+    {
+        add => _flowControlAsyncWrapper.AddHandler(value);
+        remove => _flowControlAsyncWrapper.RemoveHandler(value);
+    }
+
+    private static Task IgnoreEventCallbackExceptionAsync(Exception exception, string context, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
 
     public async Task HandleBasicReturnAsync(BasicReturnEventArgs args)
     {
@@ -145,6 +186,11 @@ internal class FakeChannel : IChannel, IDisposable, IAsyncDisposable
         await _channelShutdownAsyncWrapper.InvokeAsync(this, reason);
         IsClosed = true;
         IsOpen = false;
+    }
+
+    public Task CloseAsync(ShutdownEventArgs reason, bool abort)
+    {
+        return CloseAsync(reason, abort, CancellationToken.None);
     }
 
     public async Task<uint> ConsumerCountAsync(string queue, CancellationToken cancellationToken = default)

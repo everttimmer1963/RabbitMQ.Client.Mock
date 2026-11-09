@@ -23,7 +23,18 @@ public class TestBase
 
     protected void ConfigureFactory(IConnectionFactory factory)
     {
-        // Modify the factory configuration as needed for your tests
+        if (factory is ConnectionFactory connectionFactory)
+        {
+            connectionFactory.HostName = "localhost";
+            connectionFactory.Port = 5672;
+            connectionFactory.UserName = "mocktest";
+            connectionFactory.Password = "mocktest";
+            connectionFactory.Ssl = new SslOption
+            {
+                Enabled = false,
+                ServerName = "localhost"
+            };
+        }
     }
 
     protected async ValueTask WaitUntilAsync(Func<bool> condition, int timeout = 10000, int interval = 100)
